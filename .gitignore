@@ -1,0 +1,30 @@
+# =========================
+# backend
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# ignore temporary HTML and image files
+*.html
+*.png
+*.pdf
+
+# =========================
+# frontend
+# =========================
+node_modules/
+dist/
+build/
+.npm/
+
+# =========================
+# IDE and OS files
+# =========================
+.DS_Store
+.vscode/
+.idea/
