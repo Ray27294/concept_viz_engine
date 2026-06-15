@@ -45,3 +45,27 @@ def is_weak_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
         return True
     
     return False
+
+def is_complete(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], table_name: str) -> bool:
+    """
+    Check if the weak entity is "complete".
+    :param chosen_fk_names: parent keys, k1
+    :param chosen_pk_names: the whole primary keys, k1 + k2
+    """
+    partial_pks = [pk for pk in chosen_pk_names if pk not in chosen_fk_names]
+    selected_cols = chosen_fk_names + partial_pks
+    sql = f"SELECT {', '.join(selected_cols)} FROM public.{table_name}"
+
+    try:
+        df = pd.read_sql(sql, engine)
+        if df.empty:
+            return False
+        
+        counts = df.groupby(chosen_fk_names).size()
+
+        return counts.nunique() == 1
+    
+    except Exception as e:
+        print(f"Error checking completeness: {e}")
+        return False
+
