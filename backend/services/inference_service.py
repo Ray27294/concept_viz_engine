@@ -1,46 +1,66 @@
-from schemas import TableMetadata
-from typing import List
+from schemas import TableMetadata, Column
+from typing import List, Set
 import pandas as pd
+
+def _get_pk_names(table: TableMetadata) -> Set[str]:
+    """Get the set of primary key column names for the given table."""
+    if not table.primary_key:
+        return set()
+    return {col.name for col in table.primary_key.columns}
+
+def _get_fk_names(table: TableMetadata) -> Set[str]:
+    """Get the set of foreign key column names for the given table."""
+    fk_names = set()
+    for fk in table.foreign_keys:
+        for col in fk.referencing.columns:
+            fk_names.add(col.name)
+    return fk_names
 
 def get_selected_columns(table: TableMetadata, selected_col_names: List[str]):
     """
     Get the selected columns from the metadata.
-    Add all the primary keys of the table.
+    Add the primary key of the table.
     """
-    return [col for col in table.columns if col.name in selected_col_names or col.is_primary_key]
+    pk_names = _get_pk_names(table)
+    return [col for col in table.columns if col.name in selected_col_names or col.name in pk_names]
 
 def is_basic_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
-    cols = get_selected_columns(table, selected_col_names)
+    selected_cols = get_selected_columns(table, selected_col_names)
+    selected_names = {c.name for c in selected_cols}
 
-    total_fks = sum(1 for c in cols if c.is_foreign_key)
+    pk_names = _get_pk_names(table)
+    fk_names = _get_fk_names(table)
 
-    pk_fks = [c.name for c in cols if c.is_primary_key and c.is_foreign_key]
+    selected_fks = selected_names & fk_names
+    pk_fks = pk_names & fk_names
 
-    if total_fks == 0:
+    if len(selected_fks) == 0:
         return True
 
-    if len(pk_fks) == 1 and all(pk in pk_fks for pk in table.primary_keys):
-        return True
-    
-    if len(table.primary_keys) == 0:
+    if len(pk_fks) == 1 and pk_fks == pk_names:
         return True
     
     return False
 
 def is_weak_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
-    cols = get_selected_columns(table, selected_col_names)
+    selected_cols = get_selected_columns(table, selected_col_names)
+    selected_names = {c.name for c in selected_cols}
 
-    pk_fks = [c.name for c in cols if c.is_primary_key and c.is_foreign_key]
+    pk_names = _get_pk_names(table)
+    fk_names = _get_fk_names(table)
+
+    pk_fks = pk_names & fk_names & selected_names
 
     if not pk_fks:
         return False
     
-    if all(pk in pk_fks for pk in table.primary_keys):
+    if pk_fks == pk_names:
         return False
     
-    chosen_pk_fks = [fk for fk in table.foreign_keys if fk.child_column in pk_fks]
+    chosen_pk_fks = [fk for fk in table.foreign_keys
+                     if any(c.name in pk_fks for c in fk.referencing.columns)]
 
-    parent_tables = set(fk.parent_table for fk in chosen_pk_fks)
+    parent_tables = set(fk.referenced.table_name for fk in chosen_pk_fks)
     if len(parent_tables) == 1:
         return True
     
@@ -50,7 +70,7 @@ def is_complete(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], 
     """
     Check if the weak entity is "complete".
     :param chosen_fk_names: parent keys, k1
-    :param chosen_pk_names: the whole primary keys, k1 + k2
+    :param chosen_pk_names: the whole primary key, k1 + k2
     """
     partial_pks = [pk for pk in chosen_pk_names if pk not in chosen_fk_names]
     selected_cols = chosen_fk_names + partial_pks
@@ -61,9 +81,11 @@ def is_complete(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], 
         if df.empty:
             return False
         
-        counts = df.groupby(chosen_fk_names).size()
+        df['k2_tuple'] = df[partial_pks].apply(tuple, axis=1)
+        
+        k2_sets = df.groupby(chosen_fk_names)['k2_tuple'].apply(frozenset)
 
-        return counts.nunique() == 1
+        return k2_sets.nunique() == 1
     
     except Exception as e:
         print(f"Error checking completeness: {e}")
