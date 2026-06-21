@@ -49,7 +49,7 @@ def is_weak_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
     pk_names = _get_pk_names(table)
     fk_names = _get_fk_names(table)
 
-    pk_fks = pk_names & fk_names & selected_names
+    pk_fks = pk_names & fk_names
 
     if not pk_fks:
         return False
@@ -90,4 +90,44 @@ def is_complete(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], 
     except Exception as e:
         print(f"Error checking completeness: {e}")
         return False
+    
+def is_one_many_relationship(table: TableMetadata, selected_col_names: List[str]) -> bool:
+    selected_cols = get_selected_columns(table, selected_col_names)
+    selected_names = {c.name for c in selected_cols}
+    
+    pk_names = _get_pk_names(table)
+    fk_names = _get_fk_names(table)
+    
+    # pure foreign keys: selected foreign keys that are not primary keys
+    pure_fks = (selected_names & fk_names) - pk_names
+    
+    if len(pure_fks) == 0:
+        return False
+        
+    chosen_fks = [
+        fk for fk in table.foreign_keys 
+        if any(c.name in pure_fks for c in fk.referencing.columns)
+    ]
+    
+    parent_tables = {fk.referenced.table_name for fk in chosen_fks}
+    if len(parent_tables) == 1:
+        return True
+    return False
+
+def is_many_many_relationship(table: TableMetadata, selected_col_names: List[str]) -> bool:
+    pk_names = _get_pk_names(table)
+    fk_names = _get_fk_names(table)
+    
+    if pk_names != fk_names:
+        return False
+        
+    if len(table.foreign_keys) != 2:
+        return False
+        
+    return True
+
+def is_reflexive(table: TableMetadata) -> bool:
+    parent_tables = {fk.referenced.table_name for fk in table.foreign_keys}
+
+    return len(parent_tables) == 1
 
