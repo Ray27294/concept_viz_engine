@@ -74,8 +74,8 @@ def extract_database_metadata(engine) -> List[TableMetadata]:
             )
             
             foreign_keys.append(ForeignKey(
-                referencing=referencing_group,
-                referenced=referenced_key
+                source=referencing_group,
+                target=referenced_key
             ))
 
         tables_metadata.append(TableMetadata(

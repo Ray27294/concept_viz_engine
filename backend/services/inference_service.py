@@ -12,7 +12,7 @@ def _get_fk_names(table: TableMetadata) -> Set[str]:
     """Get the set of foreign key column names for the given table."""
     fk_names = set()
     for fk in table.foreign_keys:
-        for col in fk.referencing.columns:
+        for col in fk.source.columns:
             fk_names.add(col.name)
     return fk_names
 
@@ -58,9 +58,9 @@ def is_weak_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
         return False
     
     chosen_pk_fks = [fk for fk in table.foreign_keys
-                     if any(c.name in pk_fks for c in fk.referencing.columns)]
+                     if any(c.name in pk_fks for c in fk.source.columns)]
 
-    parent_tables = set(fk.referenced.table_name for fk in chosen_pk_fks)
+    parent_tables = set(fk.target.table_name for fk in chosen_pk_fks)
     if len(parent_tables) == 1:
         return True
     
@@ -106,10 +106,10 @@ def is_one_many_relationship(table: TableMetadata, selected_col_names: List[str]
         
     chosen_fks = [
         fk for fk in table.foreign_keys 
-        if any(c.name in pure_fks for c in fk.referencing.columns)
+        if any(c.name in pure_fks for c in fk.source.columns)
     ]
     
-    parent_tables = {fk.referenced.table_name for fk in chosen_fks}
+    parent_tables = {fk.target.table_name for fk in chosen_fks}
     if len(parent_tables) == 1:
         return True
     return False
@@ -121,13 +121,13 @@ def is_many_many_relationship(table: TableMetadata, selected_col_names: List[str
     if pk_names != fk_names:
         return False
         
-    if len(table.foreign_keys) != 2:
+    if len(table.foreign_keys) < 2:
         return False
         
     return True
 
 def is_reflexive(table: TableMetadata) -> bool:
-    parent_tables = {fk.referenced.table_name for fk in table.foreign_keys}
+    parent_tables = {fk.target.table_name for fk in table.foreign_keys}
 
     return len(parent_tables) == 1
 

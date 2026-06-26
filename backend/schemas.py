@@ -1,5 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
+
+class TableMetadata(BaseModel):
+    table_name: str
+    columns: List[Column]
+    primary_key: Optional[Key]
+    foreign_keys: List[ForeignKey]
 
 class Column(BaseModel):
     name: str
@@ -14,11 +20,7 @@ class Key(TableColumnGroup):
     pass
 
 class ForeignKey(BaseModel):
-    referencing: TableColumnGroup
-    referenced: Key
-
-class TableMetadata(BaseModel):
-    table_name: str
-    columns: List[Column]
-    primary_key: Optional[Key]
-    foreign_keys: List[ForeignKey]
+    source: TableColumnGroup = Field(alias='from')
+    target: Key = Field(alias='to')
+    class Config:
+        populate_by_name = True
