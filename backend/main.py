@@ -5,8 +5,11 @@ from database import SessionLocal, engine
 from schemas import TableMetadata
 from typing import List
 from services import metadata_service
+from routers import debug
 
 app = FastAPI(title="Concept Viz Engine API")
+
+app.include_router(debug.router)
 
 def get_db():
     db = SessionLocal()
