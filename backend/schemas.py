@@ -24,3 +24,14 @@ class ForeignKey(BaseModel):
     target: Key = Field(alias='to')
     class Config:
         populate_by_name = True
+
+class ChartCombination(BaseModel):
+    chart_name: str
+    geom: str
+    stat: str
+
+class RecommendationResponse(BaseModel):
+    pattern: str
+    available_geoms: List[str]
+    available_stats: List[str]
+    valid_combinations: List[ChartCombination]
