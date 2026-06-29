@@ -35,3 +35,7 @@ class RecommendationResponse(BaseModel):
     available_geoms: List[str]
     available_stats: List[str]
     valid_combinations: List[ChartCombination]
+
+class RecommendRequest(BaseModel):
+    table_name: str
+    selected_columns: List[str]

@@ -66,7 +66,7 @@ def is_weak_entity(table: TableMetadata, selected_col_names: List[str]) -> bool:
     
     return False
 
-def is_complete(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], table_name: str) -> bool:
+def is_complete_weak(engine, chosen_pk_names: List[str], chosen_fk_names: List[str], table_name: str) -> bool:
     """
     Check if the weak entity is "complete".
     :param chosen_fk_names: parent keys, k1
