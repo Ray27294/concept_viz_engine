@@ -1,17 +1,39 @@
-import React, { useState, useMemo } from 'react';
-import { Card, Select, Button, Typography, Space, Tag } from 'antd';
-import { MOCK_MONDIAL_DATA } from '../mockData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Card, Select, Button, Typography, Space, Tag, Spin, message } from 'antd';
+import { fetchMetadata } from '../services/api';
+import type { TableMetadata } from '../types';
 
 const { Title, Text } = Typography;
 
 export const DataSelector: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+
+  const [metadata, setMetadata] = useState<TableMetadata[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        // request FastAPI
+        const data = await fetchMetadata();
+        setMetadata(data);
+      } catch (error) {
+        console.error("failed to fetch metadata:", error);
+        message.error("failed to connect to the backend. Please ensure the FastAPI server is running and accessible.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
   
   // 1. Find the current table's data based on the selected table name
   const currentTableData = useMemo(() => {
-    return MOCK_MONDIAL_DATA.find(t => t.table_name === selectedTable);
-  }, [selectedTable]);
+    return metadata.find(t => t.table_name === selectedTable);
+  }, [selectedTable, metadata]);
 
   // 2. When the user switches tables, trigger this action
   const handleTableChange = (value: string) => {
@@ -36,7 +58,8 @@ export const DataSelector: React.FC = () => {
       title={<Title level={4} style={{ margin: 0 }}>🗄️ Data Selector</Title>} 
       style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: '8px' }}
     >
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Spin spinning={isLoading} description="Loading metadata..."></Spin>
+      <Space vertical size="large" style={{ width: '100%' }}>
         
         {/* Table Selection */}
         <div>
@@ -46,7 +69,8 @@ export const DataSelector: React.FC = () => {
             placeholder="Please select a table from the database..."
             value={selectedTable}
             onChange={handleTableChange}
-            options={MOCK_MONDIAL_DATA.map(table => ({
+            showSearch
+            options={metadata.map(table => ({
               label: `📊 ${table.table_name}`,
               value: table.table_name
             }))}

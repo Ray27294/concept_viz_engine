@@ -6,8 +6,17 @@ from schemas import TableMetadata
 from typing import List
 from services import metadata_service
 from routers import debug, recommend
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Concept Viz Engine API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 app.include_router(debug.router)
 app.include_router(recommend.router)
