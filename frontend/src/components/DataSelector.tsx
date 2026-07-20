@@ -5,7 +5,11 @@ import type { TableMetadata } from '../types';
 
 const { Title, Text } = Typography;
 
-export const DataSelector: React.FC = () => {
+interface DataSelectorProps {
+  onAnalyze: (tableName: string, columns: string[]) => void;
+}
+
+export const DataSelector: React.FC<DataSelectorProps> = ({ onAnalyze }) => {
   const [selectedTable, setSelectedTable] = useState<string | undefined>(undefined);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
 
@@ -43,6 +47,9 @@ export const DataSelector: React.FC = () => {
 
   // 3. When the user clicks the submit button
   const handleSubmit = () => {
+    if (selectedTable && selectedColumns.length > 0) {
+      onAnalyze(selectedTable, selectedColumns);
+    }
     console.log("Data to be sent to the backend:", {
       table_name: selectedTable,
       selected_columns: selectedColumns

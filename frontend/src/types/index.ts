@@ -27,3 +27,14 @@ export interface RecommendationResponse {
   available_stats: string[];
   valid_combinations: ChartCombination[];
 }
+
+export interface DataPreviewRequest {
+  table_name: string;
+  selected_columns: string[];
+  limit?: number;
+}
+
+export interface DataPreviewResponse {
+  columns: string[];
+  rows: Record<string, any>[]; // 键值对字典
+}

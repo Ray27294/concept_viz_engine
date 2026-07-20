@@ -5,7 +5,7 @@ from database import SessionLocal, engine
 from schemas import TableMetadata
 from typing import List
 from services import metadata_service
-from routers import debug, recommend
+from routers import debug, recommend, data
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Concept Viz Engine API")
@@ -20,6 +20,7 @@ app.add_middleware(
 
 app.include_router(debug.router)
 app.include_router(recommend.router)
+app.include_router(data.router)
 
 def get_db():
     db = SessionLocal()

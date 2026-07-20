@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { TableMetadata, RecommendRequest, RecommendationResponse } from '../types';
+import type { TableMetadata, RecommendRequest, RecommendationResponse, DataPreviewRequest, DataPreviewResponse } from '../types';
 
 const apiClient = axios.create({
   baseURL: 'http://127.0.0.1:8000',
@@ -8,5 +8,12 @@ const apiClient = axios.create({
 
 export const fetchMetadata = async (): Promise<TableMetadata[]> => {
   const response = await apiClient.get<TableMetadata[]>('/metadata');
+  return response.data;
+};
+
+export const fetchDataPreview = async (
+  requestData: DataPreviewRequest
+): Promise<DataPreviewResponse> => {
+  const response = await apiClient.post<DataPreviewResponse>('/data/preview', requestData);
   return response.data;
 };

@@ -39,3 +39,12 @@ class RecommendationResponse(BaseModel):
 class RecommendRequest(BaseModel):
     table_name: str
     selected_columns: List[str]
+
+class DataPreviewRequest(BaseModel):
+    table_name: str
+    selected_columns: List[str]
+    limit: int = 5
+
+class DataPreviewResponse(BaseModel):
+    columns: List[str]
+    rows: List[dict]
