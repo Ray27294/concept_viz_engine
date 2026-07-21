@@ -35,20 +35,24 @@ def recommend_components(
     combinations: List[ChartCombination] = []
 
     if "Basic Entity" in pattern:
-        if num_scalars >= 1:
+        if num_scalars == 1 and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Bar Chart", geom="col", stat="identity"))
             combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
             combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))
             combinations.append(ChartCombination(chart_name="Density Plot", geom="area", stat="density"))
             if is_geo:
                 combinations.append(ChartCombination(chart_name="Choropleth Map", geom="map", stat="identity"))
-        if num_scalars >= 2:
+        if num_scalars == 1 and num_lexical == 1:
+            combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
+            combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))
+            combinations.append(ChartCombination(chart_name="Density Plot", geom="area", stat="density"))
+        if num_scalars in [2, 3] and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Scatter Diagram", geom="point", stat="identity"))
-        if num_scalars >= 3:
+        if num_scalars in [3, 4] and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Bubble Chart", geom="point", stat="identity"))
 
     elif "Weak Entity" in pattern:
-        if num_scalars >= 1:
+        if num_scalars == 1:
             combinations.append(ChartCombination(chart_name="Line Chart", geom="line", stat="identity"))
             combinations.append(ChartCombination(chart_name="Grouped Bar", geom="col", stat="identity")) # pos="dodge"
             combinations.append(ChartCombination(chart_name="Boxplot", geom="boxplot", stat="boxplot"))
@@ -56,17 +60,19 @@ def recommend_components(
             combinations.append(ChartCombination(chart_name="Point Range", geom="pointrange", stat="summary"))
             if is_complete:
                 combinations.append(ChartCombination(chart_name="Stacked Bar", geom="col", stat="identity")) # pos="stack"
+        if num_scalars in [1, 2]:
+            combinations.append(ChartCombination(chart_name="Line Chart", geom="line", stat="identity"))
 
     elif "One-to-Many" in pattern:
-        if num_scalars >= 1:
+        if num_scalars == 1:
             combinations.append(ChartCombination(chart_name="Boxplot", geom="boxplot", stat="boxplot"))
             combinations.append(ChartCombination(chart_name="Violin Plot", geom="violin", stat="ydensity"))
             combinations.append(ChartCombination(chart_name="Point Range", geom="pointrange", stat="summary"))
 
     elif "Many-to-Many" in pattern:
-        if num_scalars >= 1 or num_lexical >= 1:
+        if num_scalars == 1 or num_lexical == 1:
             combinations.append(ChartCombination(chart_name="Heatmap Matrix", geom="tile", stat="identity"))
-        if num_scalars >= 2:
+        if num_scalars == 2:
             combinations.append(ChartCombination(chart_name="2D Binning", geom="tile", stat="bin_2d"))
 
     available_geoms = list({c.geom for c in combinations})
