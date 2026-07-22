@@ -1,10 +1,12 @@
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from typing import List
 from schemas import TableMetadata, Column, TableColumnGroup, Key, ForeignKey
 
 NUM_TYPES = ["NUMERIC", "INT", "FLOAT", "DOUBLE", "DECIMAL", "REAL"]
 TEMP_TYPES = ["DATE", "TIME", "TIMESTAMP"]
 LEX_TYPES = ["VARCHAR", "TEXT", "CHAR", "BPCHAR", "UUID"]
+
+DISCRETE_THRESHOLD = 15
 
 def get_semantic_type(db_type_str: str) -> str:
     db_type_str = db_type_str.upper()
@@ -25,16 +27,35 @@ def extract_database_metadata(engine) -> List[TableMetadata]:
     table_names = inspector.get_table_names(schema="public")
 
     all_columns_cache = {}
-    for t_name in table_names:
-        cols = inspector.get_columns(t_name, schema="public")
-        col_objs = []
-        for c in cols:
-            col_objs.append(Column(
-                name=c['name'],
-                type=str(c['type']),
-                semantic_type=get_semantic_type(str(c['type']))
-            ))
-        all_columns_cache[t_name] = col_objs
+    with engine.connect() as conn:
+        for t_name in table_names:
+            cols = inspector.get_columns(t_name, schema="public")
+            col_objs = []
+            
+            for c in cols:
+                col_name = c['name']
+                db_type = str(c['type'])
+                semantic_type = get_semantic_type(db_type)
+                
+                if semantic_type == "scalar":
+                    try:
+                        query = text(f'SELECT COUNT(DISTINCT "{col_name}") FROM public."{t_name}"')
+                        distinct_count = conn.execute(query).scalar()
+                        
+                        if distinct_count is not None and 0 < distinct_count <= DISCRETE_THRESHOLD:
+                            semantic_type = "lexical"
+                            
+                    except Exception as e:
+                        print(f"failed to inspect {t_name}.{col_name}, downgrading to scalar: {e}")
+                        pass
+
+                col_objs.append(Column(
+                    name=col_name,
+                    type=db_type,
+                    semantic_type=semantic_type
+                ))
+            
+            all_columns_cache[t_name] = col_objs
 
     # Helper function to get Column objects for a given table and list of column names    
     def get_column_objs(t_name: str, col_names: List[str]) -> List[Column]:
