@@ -17,3 +17,10 @@ export const fetchDataPreview = async (
   const response = await apiClient.post<DataPreviewResponse>('/data/preview', requestData);
   return response.data;
 };
+
+export const fetchRecommendations = async (
+  requestData: RecommendRequest
+): Promise<RecommendationResponse> => {
+  const response = await apiClient.post<RecommendationResponse>('/recommend/', requestData);
+  return response.data;
+};
