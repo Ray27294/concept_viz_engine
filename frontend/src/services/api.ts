@@ -24,3 +24,21 @@ export const fetchRecommendations = async (
   const response = await apiClient.post<RecommendationResponse>('/recommend/', requestData);
   return response.data;
 };
+
+export interface PlotRequest {
+  table_name: string;
+  selected_columns: string[];
+  geom: string;
+  stat: string;
+}
+
+export interface PlotResponse {
+  html: string;
+}
+
+export const fetchChartHtml = async (
+  requestData: PlotRequest
+): Promise<PlotResponse> => {
+  const response = await apiClient.post<PlotResponse>('/plot/generate', requestData);
+  return response.data;
+};

@@ -1,21 +1,28 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert } from 'antd';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message } from 'antd';
+import { fetchChartHtml } from '../services/api';
 import type { RecommendationResponse } from '../types';
 
 const { Title, Text } = Typography;
 
 interface ChartConfiguratorProps {
+  tableName: string;
+  columns: string[];
   recommendations: RecommendationResponse;
 }
 
-export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ recommendations }) => {
+export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName, columns, recommendations }) => {
   const [selectedGeom, setSelectedGeom] = useState<string | null>(null);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
+
+  const [chartHtml, setChartHtml] = useState<string | null>(null);
+  const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
   // When the user selects a new table or columns, reset the Geom and Stat selections to null
   useEffect(() => {
     setSelectedGeom(null);
     setSelectedStat(null);
+    setChartHtml(null);
   }, [recommendations]);
 
   // If the user has selected a Stat, find out which Geoms are valid
@@ -58,7 +65,27 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ recommenda
     disabled: !allowedStats.includes(stat)
   }));
 
+  const handleGeneratePlot = async () => {
+    if (!selectedGeom || !selectedStat) return;
+    setIsDrawing(true);
+    try {
+      const res = await fetchChartHtml({
+        table_name: tableName,
+        selected_columns: columns,
+        geom: selectedGeom,
+        stat: selectedStat
+      });
+      setChartHtml(res.html);
+      message.success("Plot generated successfully!");
+    } catch (error) {
+      message.error("Failed to generate plot. Please check the backend server.");
+    } finally {
+      setIsDrawing(false);
+    }
+  };
+
   return (
+    <>
     <Card 
       title={<Title level={5} style={{ margin: 0 }}>Grammar of Graphics</Title>} 
       style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: '8px', marginTop: '20px' }}
@@ -108,7 +135,22 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ recommenda
         ) : (selectedGeom || selectedStat) ? (
           <Alert message="Please select both a Geometry and a Statistical Transform to see the matched chart." type="info" showIcon />
         ) : null}
+        <Button type="primary" disabled={!matchedChartName} loading={isDrawing} onClick={handleGeneratePlot}>
+            Generate Plot
+        </Button>
       </div>
     </Card>
+
+    {chartHtml && (
+        <Card style={{ marginTop: '20px', borderRadius: '8px', padding: 0, overflow: 'hidden' }}>
+          <iframe 
+            title="Interactive Chart"
+            srcDoc={chartHtml} 
+            sandbox="allow-scripts"
+            style={{ width: '100%', height: '500px', border: 'none', display: 'block' }} 
+          />
+        </Card>
+    )}
+    </>
   );
 };

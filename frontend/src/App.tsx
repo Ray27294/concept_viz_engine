@@ -67,7 +67,7 @@ function App() {
                  
                  <Spin spinning={isRecommending} description="Waiting for recommendation engine feedback...">
                    {recommendations ? (
-                     <ChartConfigurator recommendations={recommendations} />
+                     <ChartConfigurator tableName={analysisConfig.table} columns={analysisConfig.cols} recommendations={recommendations} />
                    ) : (
                      <div style={{ padding: '20px', textAlign: 'center' }}>
                        <Text type="secondary">Waiting for recommendation engine feedback...</Text>

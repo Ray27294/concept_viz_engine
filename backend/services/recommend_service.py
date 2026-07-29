@@ -35,7 +35,7 @@ def recommend_components(
     combinations: List[ChartCombination] = []
 
     if "Basic Entity" in pattern:
-        if num_scalars == 1 and num_lexical == 0:
+        if num_scalars == 1:
             combinations.append(ChartCombination(chart_name="Bar Chart", geom="col", stat="identity"))
             combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
             combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))

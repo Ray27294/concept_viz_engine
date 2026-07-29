@@ -5,8 +5,10 @@ from database import SessionLocal, engine
 from schemas import TableMetadata
 from typing import List
 from services import metadata_service
-from routers import debug, recommend, data
+from routers import debug, recommend, data, plot
 from fastapi.middleware.cors import CORSMiddleware
+import matplotlib
+matplotlib.use('Agg')  # Use a non-interactive backend for matplotlib
 
 app = FastAPI(title="Concept Viz Engine API")
 
@@ -21,6 +23,7 @@ app.add_middleware(
 app.include_router(debug.router)
 app.include_router(recommend.router)
 app.include_router(data.router)
+app.include_router(plot.router)
 
 def get_db():
     db = SessionLocal()
