@@ -14,6 +14,7 @@ interface ChartConfiguratorProps {
 export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName, columns, recommendations }) => {
   const [selectedGeom, setSelectedGeom] = useState<string | null>(null);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
+  const [limitMethod, setLimitMethod] = useState<string>('top');
 
   const [chartHtml, setChartHtml] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
@@ -73,7 +74,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         table_name: tableName,
         selected_columns: columns,
         geom: selectedGeom,
-        stat: selectedStat
+        stat: selectedStat,
+        limit_method: limitMethod
       });
       setChartHtml(res.html);
       message.success("Plot generated successfully!");
@@ -118,6 +120,25 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
           />
         </Col>
       </Row>
+
+      {matchedChartName === "Bar Chart" && (
+          <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text strong>📊 Sampling Method</Text>
+              <Select 
+                value={limitMethod}
+                onChange={setLimitMethod}
+                style={{ width: '100%' }}
+                options={[
+                  { label: 'Top 30', value: 'top' },
+                  { label: 'Bottom 30', value: 'bottom' },
+                  { label: 'Random Sample (30)', value: 'random' },
+                  { label: 'Distributed Sample (30) (Systematic Sample)', value: 'distributed' }
+                ]}
+              />
+            </Space>
+          </div>
+      )}
 
       {/* Bottom feedback area: Show chart name suggestion after user makes valid selections */}
       <div style={{ marginTop: '20px', minHeight: '40px' }}>

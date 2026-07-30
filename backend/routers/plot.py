@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
 import pandas as pd
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
@@ -17,6 +18,7 @@ class PlotRequest(BaseModel):
     selected_columns: List[str]
     geom: str
     stat: str
+    limit_method: str = "top"
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -63,12 +65,23 @@ def generate_plot(request: PlotRequest):
             x_col = pk_names[0] if pk_names else columns_to_fetch[0]
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
 
+            title_prefix = ""
             if len(df) > 30:
-                df = df.sort_values(by=y_col, ascending=False).head(30)
-                title_prefix = "Top 30 "
-            else:
-                df = df.sort_values(by=y_col, ascending=False)
-                title_prefix = ""
+                if request.limit_method == "top":
+                    df = df.sort_values(by=y_col, ascending=False).head(30)
+                    title_prefix = "Top 30 "
+                elif request.limit_method == "bottom":
+                    df = df.sort_values(by=y_col, ascending=True).head(30)
+                    title_prefix = "Bottom 30 "
+                elif request.limit_method == "random":
+                    df = df.sample(n=30)
+                    title_prefix = "Random Sample (30) "
+                elif request.limit_method == "distributed":
+                    df_sorted = df.sort_values(by=y_col, ascending=False)
+                    indices = np.linspace(0, len(df_sorted) - 1, 30, dtype=int)
+                    df = df_sorted.iloc[indices]
+                    title_prefix = "Distributed Sample (30) "
+                    df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
 
             gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
             
