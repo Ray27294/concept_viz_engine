@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message } from 'antd';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Spin, Switch } from 'antd';
 import { fetchChartHtml } from '../services/api';
 import type { RecommendationResponse } from '../types';
 
@@ -15,6 +15,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [selectedGeom, setSelectedGeom] = useState<string | null>(null);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [limitMethod, setLimitMethod] = useState<string>('top');
+  const [logScale, setLogScale] = useState<boolean>(false);
 
   const [chartHtml, setChartHtml] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
@@ -23,6 +24,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   useEffect(() => {
     setSelectedGeom(null);
     setSelectedStat(null);
+    setLogScale(false);
     setChartHtml(null);
   }, [recommendations]);
 
@@ -75,7 +77,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         selected_columns: columns,
         geom: selectedGeom,
         stat: selectedStat,
-        limit_method: limitMethod
+        limit_method: limitMethod,
+        log_scale: logScale
       });
       setChartHtml(res.html);
       message.success("Plot generated successfully!");
@@ -121,24 +124,44 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         </Col>
       </Row>
 
-      {matchedChartName === "Bar Chart" && (
+      {matchedChartName && (
           <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Text strong>📊 Sampling Method</Text>
-              <Select 
-                value={limitMethod}
-                onChange={setLimitMethod}
-                style={{ width: '100%' }}
-                options={[
-                  { label: 'Top 30', value: 'top' },
-                  { label: 'Bottom 30', value: 'bottom' },
-                  { label: 'Random Sample (30)', value: 'random' },
-                  { label: 'Distributed Sample (30) (Systematic Sample)', value: 'distributed' }
-                ]}
-              />
-            </Space>
+            <Row gutter={24}>
+              {/* If it's a bar chart, show sampling method options */}
+              <Col span={12}>
+                {matchedChartName === "Bar Chart" ? (
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Text strong>Sampling Method</Text>
+                    <Select 
+                      value={limitMethod}
+                      onChange={setLimitMethod}
+                      style={{ width: '100%' }}
+                      options={[
+                        { label: 'Top 30', value: 'top' },
+                        { label: 'Bottom 30', value: 'bottom' },
+                        { label: 'Random 30', value: 'random' },
+                        { label: 'Distributed 30', value: 'distributed' }
+                      ]}
+                    />
+                  </Space>
+                ) : (
+                  <Text type="secondary">Current chart does not require row truncation</Text>
+                )}
+              </Col>
+
+              {/* Scale toggle */}
+              <Col span={12}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Data Axis Scaling</Text>
+                  <Space style={{ marginTop: '4px' }}>
+                    <Switch checked={logScale} onChange={setLogScale} />
+                    <Text>Enable Log10 Scale</Text>
+                  </Space>
+                </Space>
+              </Col>
+            </Row>
           </div>
-      )}
+        )}
 
       {/* Bottom feedback area: Show chart name suggestion after user makes valid selections */}
       <div style={{ marginTop: '20px', minHeight: '40px' }}>

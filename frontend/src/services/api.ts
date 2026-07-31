@@ -31,6 +31,7 @@ export interface PlotRequest {
   geom: string;
   stat: string;
   limit_method?: string; // Optional property for limit method
+  log_scale?: boolean; // Optional property for log scale
 }
 
 export interface PlotResponse {

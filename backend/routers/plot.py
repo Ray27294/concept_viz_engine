@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
-from plotnine import ggplot, aes, geom_col, geom_bar, theme_minimal, labs, theme, element_text
+from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, scale_y_log10, theme_minimal, labs, theme, element_text, scale_x_log10
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
@@ -19,6 +19,7 @@ class PlotRequest(BaseModel):
     geom: str
     stat: str
     limit_method: str = "top"
+    log_scale: bool = False
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -53,13 +54,26 @@ def generate_plot(request: PlotRequest):
 
     # identify scalar
     scalar_cols = []
+    lexical_cols = []
     for col_name in request.selected_columns:
         col_meta = next((c for c in table_meta.columns if c.name == col_name), None)
         if col_meta and col_meta.semantic_type == "scalar":
             scalar_cols.append(col_name)
+        elif col_meta and col_meta.semantic_type == "lexical":
+            lexical_cols.append(col_name)
 
     # build the plot using plotnine
     try:
+        gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+
+        group_col = lexical_cols[0] if lexical_cols else None
+        if group_col:
+            unique_count = df[group_col].nunique()
+            if unique_count > 10:
+                top_categories = df[group_col].value_counts().nlargest(9).index.tolist()
+                df[group_col] = df[group_col].apply(lambda x: x if x in top_categories else 'Other')
+                cats = top_categories + ['Other']
+                df[group_col] = pd.Categorical(df[group_col], categories=cats, ordered=True)
 
         if request.geom == "col" and request.stat == "identity":
             x_col = pk_names[0] if pk_names else columns_to_fetch[0]
@@ -87,14 +101,41 @@ def generate_plot(request: PlotRequest):
             
             mapping = aes(x=x_col, y=y_col, tooltip=y_col, hover_group=x_col)
             gg = gg + mapping + geom_col(fill="#1890ff", alpha=0.8) + labs(title=f"{title_prefix}{y_col} by {x_col}") + theme(figure_size=(10, 8))
+            if request.log_scale:
+                gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
         elif request.geom == "bar" and request.stat == "bin":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            if group_col:
+                mapping = aes(x=x_col, fill=group_col)
+                gg = gg + mapping + geom_histogram(bins=30, alpha=0.7, position="identity") + labs(title=f"Distribution of {x_col} by {group_col}")
+            else:
+                mapping = aes(x=x_col)       
+                gg = gg + mapping + geom_histogram(bins=30, fill="#52c41a", alpha=0.8, color="green") + labs(title=f"Distribution of {x_col}")
+            if request.log_scale:
+                gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
 
-            gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
-            
-            mapping = aes(x=x_col) 
-            gg = gg + mapping + geom_bar(fill="#52c41a", alpha=0.8, color="green") + labs(title=f"Distribution of {x_col}")
+        elif request.geom == "line" and request.stat == "bin":
+            x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            if group_col:
+                mapping = aes(x=x_col, color=group_col)
+                gg = gg + mapping + geom_line(stat="bin", bins=30, size=1.2) + labs(title=f"Frequency Polygon of {x_col} by {group_col}")
+            else:
+                mapping = aes(x=x_col)       
+                gg = gg + mapping + geom_line(stat="bin", bins=30, color="#fa8c16", size=1.2) + labs(title=f"Frequency Polygon of {x_col}")
+            if request.log_scale:
+                gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
+
+        elif request.geom == "area" and request.stat == "density":
+            x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            if group_col:
+                mapping = aes(x=x_col, fill=group_col)
+                gg = gg + mapping + geom_density(alpha=0.5) + labs(title=f"Density Plot of {x_col} by {group_col}")
+            else:
+                mapping = aes(x=x_col)       
+                gg = gg + mapping + geom_density(fill="#722ed1", alpha=0.6, color="#531dab") + labs(title=f"Density Plot of {x_col}")
+            if request.log_scale:
+                gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
         
         else:
             raise ValueError(f"Currently not supported: geom={request.geom}, stat={request.stat}")
