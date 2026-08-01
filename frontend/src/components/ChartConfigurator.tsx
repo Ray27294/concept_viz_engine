@@ -127,9 +127,9 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
       {matchedChartName && (
           <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
             <Row gutter={24}>
-              {/* If it's a bar chart, show sampling method options */}
+              {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
-                {matchedChartName === "Bar Chart" ? (
+                {matchedChartName === "Bar Chart" || matchedChartName === "Line Chart" ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
                     <Select 
@@ -137,10 +137,10 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                       onChange={setLimitMethod}
                       style={{ width: '100%' }}
                       options={[
-                        { label: 'Top 30', value: 'top' },
-                        { label: 'Bottom 30', value: 'bottom' },
-                        { label: 'Random 30', value: 'random' },
-                        { label: 'Distributed 30', value: 'distributed' }
+                        { label: 'Top (Highest values)', value: 'top' },
+                        { label: 'Bottom (Lowest values)', value: 'bottom' },
+                        { label: 'Random Sample', value: 'random' },
+                        { label: 'Distributed Sample(Evenly Sampling)', value: 'distributed' }
                       ]}
                     />
                   </Space>

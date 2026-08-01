@@ -200,7 +200,7 @@ def generate_plot(request: PlotRequest):
             if len(scalar_cols) == 3:
                 aes_args["color"] = scalar_cols[2]
                 aes_args["size"] = scalar_cols[2]
-                title = f"Scatter/Bubble Chart: {y_col} vs {x_col} (Color & Size: {scalar_cols[2]})"
+                title = f"Bubble Chart: {y_col} vs {x_col} (Color & Size: {scalar_cols[2]})"
             elif len(scalar_cols) >= 4:
                 aes_args["size"] = scalar_cols[2]
                 aes_args["color"] = scalar_cols[3]
@@ -213,6 +213,52 @@ def generate_plot(request: PlotRequest):
 
             if request.log_scale:
                 gg = gg + scale_x_log10() + scale_y_log10() + labs(x=f"Log-scaled {x_col}", y=f"Log-scaled {y_col}")
+
+        elif request.geom == "line" and request.stat == "identity":
+            y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            group_col = "Entity_Group"
+            x_col = pk_names[-1]
+            entity_cols = pk_names[:-1]  # All primary key columns except the last one for grouping
+            df[group_col] = df[entity_cols].astype(str).agg(', '.join, axis=1)
+            group_display_name = " + ".join(entity_cols)
+
+            title_prefix = ""
+
+            if group_col and df[group_col].nunique() > 10:
+                if request.limit_method == "top":
+                    top_groups = df.groupby(group_col)[y_col].max().nlargest(10).index.tolist()
+                    title_prefix = "Top 10 "
+                elif request.limit_method == "bottom":
+                    top_groups = df.groupby(group_col)[y_col].max().nsmallest(10).index.tolist()
+                    title_prefix = "Bottom 10 "
+                elif request.limit_method == "random":
+                    import random
+                    all_groups = df[group_col].dropna().unique().tolist()
+                    top_groups = random.sample(all_groups, min(10, len(all_groups)))
+                    title_prefix = "Random 10 "
+                elif request.limit_method == "distributed":
+                    sorted_groups = df.groupby(group_col)[y_col].max().sort_values(ascending=False).index.tolist()
+                    indices = np.linspace(0, len(sorted_groups) - 1, 10, dtype=int)
+                    top_groups = [sorted_groups[i] for i in indices]
+                    title_prefix = "Distributed 10 "
+                else:
+                    top_groups = df.groupby(group_col)[y_col].max().nlargest(10).index.tolist()
+                    
+                df = df[df[group_col].isin(top_groups)]
+
+            df = df.sort_values(by=[group_col, x_col] if group_col else [x_col])
+
+            gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+            
+            if group_col:
+                mapping = aes(x=x_col, y=y_col, color=group_col, group=group_col, tooltip=y_col, hover_group=group_col)
+                gg = gg + mapping + geom_line(size=1) + geom_point(size=2, alpha=0.8) + labs(title=f"{title_prefix}Trend of {y_col} by {group_display_name}", color="Entity")
+            else:
+                mapping = aes(x=x_col, y=y_col, tooltip=x_col)
+                gg = gg + mapping + geom_line(color="#1890ff", size=1) + geom_point(color="#1890ff", size=2) + labs(title=f"Trend of {y_col}")
+            
+            if request.log_scale:
+                gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
         
         else:
             raise ValueError(f"Currently not supported: geom={request.geom}, stat={request.stat}")
