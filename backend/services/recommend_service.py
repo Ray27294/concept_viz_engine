@@ -1,7 +1,7 @@
 from typing import List
 from schemas import TableMetadata, ChartCombination, RecommendationResponse
 
-GEO_NAMES = {"country", "city", "state", "county", "province"}
+GEO_NAMES = {"country"}
 
 def _get_attributes_info(table: TableMetadata, selected_col_names: List[str]):
     """Analyse the selected columns of a table to determine the number of scalar and lexical attributes, 
@@ -46,7 +46,7 @@ def recommend_components(
             combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
             combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))
             combinations.append(ChartCombination(chart_name="Density Plot", geom="area", stat="density"))
-        if num_scalars in [2, 3] and num_lexical == 0:
+        if num_scalars == 2 and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Scatter Diagram", geom="point", stat="identity"))
         if num_scalars in [3, 4] and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Bubble Chart", geom="point", stat="identity"))

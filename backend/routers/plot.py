@@ -6,12 +6,26 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
-from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, scale_y_log10, theme_minimal, labs, theme, element_text, scale_x_log10
+from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
 
 router = APIRouter(prefix="/plot", tags=["Plotting"])
+
+_world_map_cache = None  # Cache for the world map data to avoid reloading it multiple times
+
+def get_world_map():
+    global _world_map_cache
+    if _world_map_cache is None:
+        try:
+            import geopandas as gpd
+            url = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
+            _world_map_cache = gpd.read_file(url)
+            _world_map_cache.rename(columns={"ADMIN": "name"}, inplace=True)
+        except ImportError:
+            raise HTTPException(status_code=500, detail="Geopandas is required for map plotting. Please install geopandas.")
+    return _world_map_cache.copy()
 
 class PlotRequest(BaseModel):
     table_name: str
@@ -33,6 +47,10 @@ def generate_plot(request: PlotRequest):
     pk_names = [col.name for col in table_meta.primary_key.columns] if table_meta.primary_key else []
     
     columns_to_fetch = list(set(request.selected_columns).union(pk_names))
+
+    if request.geom == "map":
+        if any(c.name.lower() == 'name' for c in table_meta.columns) and 'name' not in columns_to_fetch:
+            columns_to_fetch.append('name')
 
     # extract the data from the database
     safe_cols = ", ".join([f'"{c}"' for c in columns_to_fetch])
@@ -136,6 +154,65 @@ def generate_plot(request: PlotRequest):
                 gg = gg + mapping + geom_density(fill="#722ed1", alpha=0.6, color="#531dab") + labs(title=f"Density Plot of {x_col}")
             if request.log_scale:
                 gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
+
+        elif request.geom == "map" and request.stat == "identity":
+            x_col = pk_names[0] if pk_names else columns_to_fetch[0]
+            y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+
+            world = get_world_map()
+
+            join_col = "name" if "name" in df.columns else x_col
+
+            COUNTRY_NAME_MAPPING = {
+                "United States": "United States of America",
+                "Congo": "Republic of the Congo",
+                "Congo, Dem.Rep.": "Democratic Republic of the Congo",
+                "Tanzania": "United Republic of Tanzania",
+                "Somalia": "Somalia",
+                "Somaliland": "Somaliland" 
+            }
+            if join_col in df.columns:
+                df[join_col] = df[join_col].replace(COUNTRY_NAME_MAPPING)
+
+            df_map = world.merge(df, how="inner", left_on="name", right_on=join_col)
+            if df_map.empty:
+                raise HTTPException(status_code=400, detail="No matching countries found for the map plot. Ensure that the 'name' column in your data matches country names in the world map.")
+
+            gg = ggplot(df_map) + theme_void()
+
+            mapping = aes(fill=y_col, tooltip=join_col, hover_group=join_col)
+            gg = gg + mapping + geom_map(color="black", size=0.2) + labs(title=f"Choropleth Map of {y_col}") + theme(figure_size=(10, 8))
+            if request.log_scale:
+                gg = gg + scale_fill_continuous(trans='log10') + labs(fill=f"Log-scaled {y_col}")
+
+        elif request.geom == "point" and request.stat == "identity":
+            x_col = scalar_cols[0]
+            y_col = scalar_cols[1]
+            label_col = pk_names[0] if pk_names else x_col
+
+            aes_args = {
+                "x": x_col,
+                "y": y_col,
+                "tooltip": label_col,
+                "hover_group": label_col
+            }
+
+            if len(scalar_cols) == 3:
+                aes_args["color"] = scalar_cols[2]
+                aes_args["size"] = scalar_cols[2]
+                title = f"Scatter/Bubble Chart: {y_col} vs {x_col} (Color & Size: {scalar_cols[2]})"
+            elif len(scalar_cols) >= 4:
+                aes_args["size"] = scalar_cols[2]
+                aes_args["color"] = scalar_cols[3]
+                title = f"Bubble Chart: {y_col} vs {x_col}"
+            else:
+                title = f"Scatter Diagram: {y_col} vs {x_col}"
+
+            mapping = aes(**aes_args)
+            gg = gg + mapping + geom_point(alpha=0.7) + labs(title=title)
+
+            if request.log_scale:
+                gg = gg + scale_x_log10() + scale_y_log10() + labs(x=f"Log-scaled {x_col}", y=f"Log-scaled {y_col}")
         
         else:
             raise ValueError(f"Currently not supported: geom={request.geom}, stat={request.stat}")
