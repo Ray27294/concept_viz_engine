@@ -32,6 +32,7 @@ export interface PlotRequest {
   stat: string;
   limit_method?: string; // Optional property for limit method
   log_scale?: boolean; // Optional property for log scale
+  chart_name?: string; // Optional property for chart name
 }
 
 export interface PlotResponse {

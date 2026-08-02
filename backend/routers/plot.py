@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
-from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
+from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
@@ -34,6 +34,7 @@ class PlotRequest(BaseModel):
     stat: str
     limit_method: str = "top"
     log_scale: bool = False
+    chart_name: str = ""
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -93,34 +94,68 @@ def generate_plot(request: PlotRequest):
                 cats = top_categories + ['Other']
                 df[group_col] = pd.Categorical(df[group_col], categories=cats, ordered=True)
 
+        # Bar Charts, including grouped and stacked bar charts
         if request.geom == "col" and request.stat == "identity":
-            x_col = pk_names[0] if pk_names else columns_to_fetch[0]
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            is_weak_entity_bar = ("Grouped" in request.chart_name or "Stacked" in request.chart_name)
 
-            title_prefix = ""
-            if len(df) > 30:
-                if request.limit_method == "top":
-                    df = df.sort_values(by=y_col, ascending=False).head(30)
-                    title_prefix = "Top 30 "
-                elif request.limit_method == "bottom":
-                    df = df.sort_values(by=y_col, ascending=True).head(30)
-                    title_prefix = "Bottom 30 "
-                elif request.limit_method == "random":
-                    df = df.sample(n=30)
-                    title_prefix = "Random Sample (30) "
-                elif request.limit_method == "distributed":
-                    df_sorted = df.sort_values(by=y_col, ascending=False)
-                    indices = np.linspace(0, len(df_sorted) - 1, 30, dtype=int)
-                    df = df_sorted.iloc[indices]
-                    title_prefix = "Distributed Sample (30) "
-                    df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
+            if is_weak_entity_bar and len(pk_names) > 1:
+                entity_cols = pk_names[:-1]
+                time_col = pk_names[-1]
+                
+                x_col = "Entity_Group"
+                df[x_col] = df[entity_cols].astype(str).agg(', '.join, axis=1)
+                x_display_name = " + ".join(entity_cols)
+                
+                group_col = time_col
+                df[group_col] = df[group_col].astype(str)
+                
+                title_prefix = ""
+                if df[x_col].nunique() > 5:
+                    top_entities = df.groupby(x_col)[y_col].max().nlargest(5).index.tolist()
+                    df = df[df[x_col].isin(top_entities)]
+                    title_prefix = "Top 5 "
 
-            gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+                df = df.sort_values(by=[x_col, group_col])
+                
+                gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+                
+                mapping = aes(x=x_col, y=y_col, fill=group_col, tooltip=group_col, hover_group=group_col)
+                
+                if "Stacked" in request.chart_name:
+                    gg = gg + mapping + geom_col(position="stack", alpha=0.9) + labs(title=f"{title_prefix}Stacked Bar: {y_col} by {x_display_name}", fill=time_col, x=x_display_name)
+                else:
+                    gg = gg + mapping + geom_col(position="dodge", alpha=0.9) + labs(title=f"{title_prefix}Grouped Bar: {y_col} by {x_display_name}", fill=time_col, x=x_display_name)
+
+                if request.log_scale:
+                    gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
+
+            else:
+                x_col = pk_names[0] if pk_names else columns_to_fetch[0]
+                title_prefix = ""
+                if len(df) > 30:
+                    if request.limit_method == "top":
+                        df = df.sort_values(by=y_col, ascending=False).head(30)
+                        title_prefix = "Top 30 "
+                    elif request.limit_method == "bottom":
+                        df = df.sort_values(by=y_col, ascending=True).head(30)
+                        title_prefix = "Bottom 30 "
+                    elif request.limit_method == "random":
+                        df = df.sample(n=30)
+                        title_prefix = "Random Sample (30) "
+                    elif request.limit_method == "distributed":
+                        df_sorted = df.sort_values(by=y_col, ascending=False)
+                        indices = np.linspace(0, len(df_sorted) - 1, 30, dtype=int)
+                        df = df_sorted.iloc[indices]
+                        title_prefix = "Distributed Sample (30) "
+                        df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
+
+                gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
             
-            mapping = aes(x=x_col, y=y_col, tooltip=y_col, hover_group=x_col)
-            gg = gg + mapping + geom_col(fill="#1890ff", alpha=0.8) + labs(title=f"{title_prefix}{y_col} by {x_col}") + theme(figure_size=(10, 8))
-            if request.log_scale:
-                gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
+                mapping = aes(x=x_col, y=y_col, tooltip=y_col, hover_group=x_col)
+                gg = gg + mapping + geom_col(fill="#1890ff", alpha=0.8) + labs(title=f"{title_prefix}{y_col} by {x_col}") + theme(figure_size=(10, 8))
+                if request.log_scale:
+                    gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
         elif request.geom == "bar" and request.stat == "bin":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
@@ -256,6 +291,55 @@ def generate_plot(request: PlotRequest):
             else:
                 mapping = aes(x=x_col, y=y_col, tooltip=x_col)
                 gg = gg + mapping + geom_line(color="#1890ff", size=1) + geom_point(color="#1890ff", size=2) + labs(title=f"Trend of {y_col}")
+            
+            if request.log_scale:
+                gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
+
+        elif request.geom in ["boxplot", "violin"]:
+            y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
+            
+            if len(pk_names) >= 2:
+                entity_cols = pk_names[:-1]
+                x_col = "Entity_Group"
+                df[x_col] = df[entity_cols].astype(str).agg(', '.join, axis=1)
+                x_display_name = " + ".join(entity_cols)
+            else:
+                x_col = pk_names[0] if pk_names else columns_to_fetch[0]
+                x_display_name = x_col
+
+            title_prefix = ""
+            if df[x_col].nunique() > 10:
+                if request.limit_method == "top":
+                    top_entities = df.groupby(x_col)[y_col].max().nlargest(10).index.tolist()
+                    title_prefix = "Top 10 "
+                elif request.limit_method == "bottom":
+                    top_entities = df.groupby(x_col)[y_col].max().nsmallest(10).index.tolist()
+                    title_prefix = "Bottom 10 "
+                elif request.limit_method == "random":
+                    import random
+                    all_entities = df[x_col].dropna().unique().tolist()
+                    top_entities = random.sample(all_entities, min(10, len(all_entities)))
+                    title_prefix = "Random 10 "
+                elif request.limit_method == "distributed":
+                    sorted_entities = df.groupby(x_col)[y_col].max().sort_values(ascending=False).index.tolist()
+                    indices = np.linspace(0, len(sorted_entities) - 1, 10, dtype=int)
+                    top_entities = [sorted_entities[i] for i in indices]
+                    title_prefix = "Distributed 10 "
+                else:
+                    top_entities = df.groupby(x_col)[y_col].max().nlargest(10).index.tolist()
+                
+                df = df[df[x_col].isin(top_entities)]
+
+            df = df.sort_values(by=[x_col])
+            
+            gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+            
+            mapping = aes(x=x_col, y=y_col, fill=x_col)
+            
+            if request.geom == "boxplot":
+                gg = gg + mapping + geom_boxplot(alpha=0.8, outlier_color="red") + labs(title=f"{title_prefix}Boxplot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
+            elif request.geom == "violin":
+                gg = gg + mapping + geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75]) + labs(title=f"{title_prefix}Violin Plot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
             
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")

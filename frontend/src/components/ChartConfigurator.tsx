@@ -78,7 +78,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         geom: selectedGeom,
         stat: selectedStat,
         limit_method: limitMethod,
-        log_scale: logScale
+        log_scale: logScale,
+        chart_name: matchedChartName || "" // Pass the matched chart name to the backend
       });
       setChartHtml(res.html);
       message.success("Plot generated successfully!");
@@ -129,7 +130,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
-                {matchedChartName === "Bar Chart" || matchedChartName === "Line Chart" ? (
+                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
                     <Select 
