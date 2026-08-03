@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
-from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
+from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, geom_pointrange, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
@@ -295,7 +295,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
-        elif request.geom in ["boxplot", "violin"]:
+        elif request.geom in ["boxplot", "violin", "pointrange"]:
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             
             if len(pk_names) >= 2:
@@ -333,13 +333,19 @@ def generate_plot(request: PlotRequest):
             df = df.sort_values(by=[x_col])
             
             gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
-            
-            mapping = aes(x=x_col, y=y_col, fill=x_col)
-            
-            if request.geom == "boxplot":
-                gg = gg + mapping + geom_boxplot(alpha=0.8, outlier_color="red") + labs(title=f"{title_prefix}Boxplot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
-            elif request.geom == "violin":
-                gg = gg + mapping + geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75]) + labs(title=f"{title_prefix}Violin Plot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
+
+            if request.geom == "pointrange":
+                mapping = aes(x=x_col, y=y_col, color=x_col)
+                gg = (gg + mapping 
+                      + geom_pointrange(stat="summary", fun_y=np.mean, fun_ymin=np.min, fun_ymax=np.max, size=1, alpha=0.8) 
+                      + labs(title=f"{title_prefix}Point Range of {y_col} by {x_display_name}", color=x_display_name, x=x_display_name))
+
+            else:
+                mapping = aes(x=x_col, y=y_col, fill=x_col)
+                if request.geom == "boxplot":
+                    gg = gg + mapping + geom_boxplot(alpha=0.8, outlier_color="red") + labs(title=f"{title_prefix}Boxplot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
+                elif request.geom == "violin":
+                    gg = gg + mapping + geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75]) + labs(title=f"{title_prefix}Violin Plot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
             
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
