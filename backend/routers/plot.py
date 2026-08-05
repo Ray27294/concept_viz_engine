@@ -345,7 +345,7 @@ def generate_plot(request: PlotRequest):
                 if request.geom == "boxplot":
                     gg = gg + mapping + geom_boxplot(alpha=0.8, outlier_color="red") + labs(title=f"{title_prefix}Boxplot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
                 elif request.geom == "violin":
-                    gg = gg + mapping + geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75]) + labs(title=f"{title_prefix}Violin Plot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
+                    gg = gg + mapping + geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75], scale="width") + labs(title=f"{title_prefix}Violin Plot of {y_col} by {x_display_name}", fill=x_display_name, x=x_display_name)
             
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
