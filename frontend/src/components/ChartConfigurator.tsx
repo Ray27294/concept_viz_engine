@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Spin, Switch } from 'antd';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber } from 'antd';
 import { fetchChartHtml } from '../services/api';
 import type { RecommendationResponse } from '../types';
 
@@ -15,6 +15,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [selectedGeom, setSelectedGeom] = useState<string | null>(null);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [limitMethod, setLimitMethod] = useState<string>('top');
+  const [limitCount, setLimitCount] = useState<number>(30);
   const [logScale, setLogScale] = useState<boolean>(false);
 
   const [chartHtml, setChartHtml] = useState<string | null>(null);
@@ -55,6 +56,14 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     return null;
   }, [selectedGeom, selectedStat, recommendations]);
 
+  useEffect(() => {
+    if (matchedChartName === "Bar Chart") {
+      setLimitCount(30);
+    } else if (["Line Chart", "Boxplot", "Violin Plot", "Point Range", "Grouped Bar", "Stacked Bar"].includes(matchedChartName || "")) {
+      setLimitCount(10);
+    }
+  }, [matchedChartName]);
+
   // Dropdown menus for Geom and Stat, with disabled options based on the current selection
   const geomOptions = recommendations.available_geoms.map(geom => ({
     label: `geom_${geom}`,
@@ -78,6 +87,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         geom: selectedGeom,
         stat: selectedStat,
         limit_method: limitMethod,
+        limit_count: limitCount,
         log_scale: logScale,
         chart_name: matchedChartName || "" // Pass the matched chart name to the backend
       });
@@ -133,10 +143,18 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                 {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <InputNumber 
+                        min={0} 
+                        max={100} 
+                        value={limitCount} 
+                        onChange={(val) => setLimitCount(val as number)} 
+                        style={{ width: '80px' }}
+                      />
                     <Select 
                       value={limitMethod}
                       onChange={setLimitMethod}
-                      style={{ width: '100%' }}
+                      style={{ width: 'calc(100% - 80px)' }}
                       options={[
                         { label: 'Top (Highest values)', value: 'top' },
                         { label: 'Bottom (Lowest values)', value: 'bottom' },
@@ -144,6 +162,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                         { label: 'Distributed Sample(Evenly Sampling)', value: 'distributed' }
                       ]}
                     />
+                    </Space.Compact>
                   </Space>
                 ) : (
                   <Text type="secondary">Current chart does not require row truncation</Text>

@@ -33,6 +33,7 @@ class PlotRequest(BaseModel):
     geom: str
     stat: str
     limit_method: str = "top"
+    limit_count: int = 30
     log_scale: bool = False
     chart_name: str = ""
 
@@ -133,22 +134,23 @@ def generate_plot(request: PlotRequest):
             else:
                 x_col = pk_names[0] if pk_names else columns_to_fetch[0]
                 title_prefix = ""
-                if len(df) > 30:
+                if len(df) > request.limit_count:
                     if request.limit_method == "top":
-                        df = df.sort_values(by=y_col, ascending=False).head(30)
-                        title_prefix = "Top 30 "
+                        df = df.sort_values(by=y_col, ascending=False).head(request.limit_count)
+                        title_prefix = f"Top {request.limit_count} "
                     elif request.limit_method == "bottom":
-                        df = df.sort_values(by=y_col, ascending=True).head(30)
-                        title_prefix = "Bottom 30 "
+                        df = df.sort_values(by=y_col, ascending=True).head(request.limit_count)
+                        title_prefix = f"Bottom {request.limit_count} "
                     elif request.limit_method == "random":
-                        df = df.sample(n=30)
-                        title_prefix = "Random Sample (30) "
+                        df = df.sample(n=request.limit_count)
+                        title_prefix = f"Random Sample ({request.limit_count}) "
                     elif request.limit_method == "distributed":
                         df_sorted = df.sort_values(by=y_col, ascending=False)
-                        indices = np.linspace(0, len(df_sorted) - 1, 30, dtype=int)
+                        indices = np.linspace(0, len(df_sorted) - 1, request.limit_count, dtype=int)
                         df = df_sorted.iloc[indices]
-                        title_prefix = "Distributed Sample (30) "
-                        df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
+                        title_prefix = f"Distributed Sample ({request.limit_count}) "
+
+                df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
 
                 gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
             
@@ -259,26 +261,26 @@ def generate_plot(request: PlotRequest):
 
             title_prefix = ""
 
-            if group_col and df[group_col].nunique() > 10:
+            if group_col and df[group_col].nunique() > request.limit_count:
                 if request.limit_method == "top":
-                    top_groups = df.groupby(group_col)[y_col].max().nlargest(10).index.tolist()
-                    title_prefix = "Top 10 "
+                    top_groups = df.groupby(group_col)[y_col].max().nlargest(request.limit_count).index.tolist()
+                    title_prefix = f"Top {request.limit_count} "
                 elif request.limit_method == "bottom":
-                    top_groups = df.groupby(group_col)[y_col].max().nsmallest(10).index.tolist()
-                    title_prefix = "Bottom 10 "
+                    top_groups = df.groupby(group_col)[y_col].max().nsmallest(request.limit_count).index.tolist()
+                    title_prefix = f"Bottom {request.limit_count} "
                 elif request.limit_method == "random":
                     import random
                     all_groups = df[group_col].dropna().unique().tolist()
-                    top_groups = random.sample(all_groups, min(10, len(all_groups)))
-                    title_prefix = "Random 10 "
+                    top_groups = random.sample(all_groups, min(request.limit_count, len(all_groups)))
+                    title_prefix = f"Random {request.limit_count} "
                 elif request.limit_method == "distributed":
                     sorted_groups = df.groupby(group_col)[y_col].max().sort_values(ascending=False).index.tolist()
-                    indices = np.linspace(0, len(sorted_groups) - 1, 10, dtype=int)
+                    indices = np.linspace(0, len(sorted_groups) - 1, request.limit_count, dtype=int)
                     top_groups = [sorted_groups[i] for i in indices]
-                    title_prefix = "Distributed 10 "
+                    title_prefix = f"Distributed {request.limit_count} "
                 else:
-                    top_groups = df.groupby(group_col)[y_col].max().nlargest(10).index.tolist()
-                    
+                    top_groups = df.groupby(group_col)[y_col].max().nlargest(request.limit_count).index.tolist()
+
                 df = df[df[group_col].isin(top_groups)]
 
             df = df.sort_values(by=[group_col, x_col] if group_col else [x_col])
@@ -295,6 +297,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
+        # Boxplot, Violin Plot, Point Range
         elif request.geom in ["boxplot", "violin", "pointrange"]:
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             
@@ -303,31 +306,34 @@ def generate_plot(request: PlotRequest):
                 x_col = "Entity_Group"
                 df[x_col] = df[entity_cols].astype(str).agg(', '.join, axis=1)
                 x_display_name = " + ".join(entity_cols)
+            elif lexical_cols:
+                x_col = lexical_cols[0]
+                x_display_name = x_col
             else:
                 x_col = pk_names[0] if pk_names else columns_to_fetch[0]
                 x_display_name = x_col
 
             title_prefix = ""
-            if df[x_col].nunique() > 10:
+            if df[x_col].nunique() > request.limit_count:
                 if request.limit_method == "top":
-                    top_entities = df.groupby(x_col)[y_col].max().nlargest(10).index.tolist()
-                    title_prefix = "Top 10 "
+                    top_entities = df.groupby(x_col)[y_col].max().nlargest(request.limit_count).index.tolist()
+                    title_prefix = f"Top {request.limit_count} "
                 elif request.limit_method == "bottom":
-                    top_entities = df.groupby(x_col)[y_col].max().nsmallest(10).index.tolist()
-                    title_prefix = "Bottom 10 "
+                    top_entities = df.groupby(x_col)[y_col].max().nsmallest(request.limit_count).index.tolist()
+                    title_prefix = f"Bottom {request.limit_count} "
                 elif request.limit_method == "random":
                     import random
                     all_entities = df[x_col].dropna().unique().tolist()
-                    top_entities = random.sample(all_entities, min(10, len(all_entities)))
-                    title_prefix = "Random 10 "
+                    top_entities = random.sample(all_entities, min(request.limit_count, len(all_entities)))
+                    title_prefix = f"Random {request.limit_count} "
                 elif request.limit_method == "distributed":
                     sorted_entities = df.groupby(x_col)[y_col].max().sort_values(ascending=False).index.tolist()
-                    indices = np.linspace(0, len(sorted_entities) - 1, 10, dtype=int)
+                    indices = np.linspace(0, len(sorted_entities) - 1, request.limit_count, dtype=int)
                     top_entities = [sorted_entities[i] for i in indices]
-                    title_prefix = "Distributed 10 "
+                    title_prefix = f"Distributed {request.limit_count} "
                 else:
-                    top_entities = df.groupby(x_col)[y_col].max().nlargest(10).index.tolist()
-                
+                    top_entities = df.groupby(x_col)[y_col].max().nlargest(request.limit_count).index.tolist()
+
                 df = df[df[x_col].isin(top_entities)]
 
             df = df.sort_values(by=[x_col])
