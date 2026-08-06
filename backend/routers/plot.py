@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 from sqlalchemy import text
-from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, geom_pointrange, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
+from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, geom_pointrange, geom_tile, geom_bin2d, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
@@ -86,14 +86,15 @@ def generate_plot(request: PlotRequest):
     try:
         gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
 
-        group_col = lexical_cols[0] if lexical_cols else None
-        if group_col:
-            unique_count = df[group_col].nunique()
-            if unique_count > 10:
-                top_categories = df[group_col].value_counts().nlargest(9).index.tolist()
-                df[group_col] = df[group_col].apply(lambda x: x if x in top_categories else 'Other')
-                cats = top_categories + ['Other']
-                df[group_col] = pd.Categorical(df[group_col], categories=cats, ordered=True)
+        if request.stat in ["bin", "density"]:
+            group_col = lexical_cols[0] if lexical_cols else None
+            if group_col:
+                unique_count = df[group_col].nunique()
+                if unique_count > 10:
+                    top_categories = df[group_col].value_counts().nlargest(9).index.tolist()
+                    df[group_col] = df[group_col].apply(lambda x: x if x in top_categories else 'Other')
+                    cats = top_categories + ['Other']
+                    df[group_col] = pd.Categorical(df[group_col], categories=cats, ordered=True)
 
         # Bar Charts, including grouped and stacked bar charts
         if request.geom == "col" and request.stat == "identity":
@@ -336,6 +337,9 @@ def generate_plot(request: PlotRequest):
 
                 df = df[df[x_col].isin(top_entities)]
 
+            is_ascending = True if request.limit_method == "bottom" else False
+            ordered_cats = df.groupby(x_col)[y_col].max().sort_values(ascending=is_ascending).index.tolist()
+            df[x_col] = pd.Categorical(df[x_col], categories=ordered_cats, ordered=True)
             df = df.sort_values(by=[x_col])
             
             gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
@@ -355,6 +359,74 @@ def generate_plot(request: PlotRequest):
             
             if request.log_scale:
                 gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
+
+        # Heatmap Matrix
+        elif request.geom == "tile" and request.stat == "identity":
+            if len(lexical_cols) + len(pk_names) < 2:
+                raise HTTPException(status_code=400, detail="Heatmap Matrix requires at least two categorical columns (lexical or primary key) to define the axes.")
+                
+            dims = pk_names + [c for c in lexical_cols if c not in pk_names]
+            x_col = dims[0]
+            y_col = dims[1]
+            
+            remaining_lexicals = [c for c in lexical_cols if c not in [x_col, y_col]]
+            
+            is_fill_scalar = False
+            if scalar_cols:
+                fill_col = scalar_cols[0]
+                is_fill_scalar = True
+            elif remaining_lexicals:
+                fill_col = remaining_lexicals[0]
+            else:
+                fill_col = None
+            
+            limit = request.limit_count 
+            
+            def get_sampled_entities(col_name):
+                if request.limit_method == "top":
+                    return df[col_name].value_counts().nlargest(limit).index.tolist()
+                elif request.limit_method == "bottom":
+                    return df[col_name].value_counts().nsmallest(limit).index.tolist()
+                elif request.limit_method == "random":
+                    import random
+                    all_entities = df[col_name].dropna().unique().tolist()
+                    return random.sample(all_entities, min(limit, len(all_entities)))
+                else:
+                    return df[col_name].value_counts().nlargest(limit).index.tolist()
+
+            if df[x_col].nunique() > limit:
+                top_x = get_sampled_entities(x_col)
+                df = df[df[x_col].isin(top_x)]    
+            if df[y_col].nunique() > limit:
+                top_y = get_sampled_entities(y_col)
+                df = df[df[y_col].isin(top_y)]
+                
+            gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
+            
+            if fill_col:
+                mapping = aes(x=x_col, y=y_col, fill=fill_col, tooltip=fill_col)
+                gg = gg + mapping + geom_tile(color="white", size=0.5) + labs(title=f"Heatmap: {fill_col} between {x_col} and {y_col}")
+                if request.log_scale and is_fill_scalar:
+                    gg = gg + scale_fill_continuous(trans='log10') + labs(fill=f"Log {fill_col}")
+            else:
+                mapping = aes(x=x_col, y=y_col, tooltip=x_col)
+                gg = gg + mapping + geom_tile(fill="#1890ff", color="white", size=0.5) + labs(title=f"Relationship Matrix: {x_col} and {y_col}")
+
+        # 2D Binning
+        elif request.geom == "tile" and request.stat == "bin_2d":
+            if len(scalar_cols) < 2:
+                raise HTTPException(status_code=400, detail="2D Binning requires at least two scalar columns to define the axes.")
+                
+            x_col = scalar_cols[0]
+            y_col = scalar_cols[1]
+            
+            mapping = aes(x=x_col, y=y_col)
+            
+            gg = ggplot(df) + theme_minimal()
+            gg = gg + mapping + geom_bin2d(bins=20) + labs(title=f"2D Density Binning of {y_col} vs {x_col}")
+            
+            if request.log_scale:
+                gg = gg + scale_x_log10() + scale_y_log10() + labs(x=f"Log-scaled {x_col}", y=f"Log-scaled {y_col}")
         
         else:
             raise ValueError(f"Currently not supported: geom={request.geom}, stat={request.stat}")

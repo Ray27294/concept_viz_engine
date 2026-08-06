@@ -70,7 +70,7 @@ def recommend_components(
             combinations.append(ChartCombination(chart_name="Point Range", geom="pointrange", stat="summary"))
 
     elif "Many-to-Many" in pattern:
-        if num_scalars == 1 or num_lexical == 1:
+        if num_scalars + num_lexical <= 1:
             combinations.append(ChartCombination(chart_name="Heatmap Matrix", geom="tile", stat="identity"))
         if num_scalars == 2:
             combinations.append(ChartCombination(chart_name="2D Binning", geom="tile", stat="bin_2d"))

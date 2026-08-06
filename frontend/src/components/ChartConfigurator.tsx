@@ -140,7 +140,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
-                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range"].includes(matchedChartName) ? (
+                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
                     <Space.Compact style={{ width: '100%' }}>
