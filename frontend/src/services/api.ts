@@ -34,6 +34,9 @@ export interface PlotRequest {
   limit_count?: number; // Optional property for limit count
   log_scale?: boolean; // Optional property for log scale
   chart_name?: string; // Optional property for chart name
+  filter_column?: string | null;
+  filter_operator?: string;
+  filter_value?: number | null;
 }
 
 export interface PlotResponse {

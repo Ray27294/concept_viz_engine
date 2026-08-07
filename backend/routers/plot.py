@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -36,6 +36,9 @@ class PlotRequest(BaseModel):
     limit_count: int = 30
     log_scale: bool = False
     chart_name: str = ""
+    filter_column: Optional[str] = None
+    filter_operator: Optional[str] = None
+    filter_value: Optional[float] = None
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -71,6 +74,22 @@ def generate_plot(request: PlotRequest):
 
     if df.empty:
         raise HTTPException(status_code=400, detail="Data source is empty, cannot generate plot")
+
+    if request.filter_column and request.filter_operator and request.filter_value is not None:
+        col = request.filter_column
+        val = request.filter_value
+        op = request.filter_operator
+        
+        if col in df.columns:
+            if op == ">": df = df[df[col] > val]
+            elif op == ">=": df = df[df[col] >= val]
+            elif op == "<": df = df[df[col] < val]
+            elif op == "<=": df = df[df[col] <= val]
+            elif op == "==": df = df[df[col] == val]
+            elif op == "!=": df = df[df[col] != val]
+            
+            if df.empty:
+                raise HTTPException(status_code=400, detail=f"No data remaining after applying filter: {col} {op} {val}")
 
     # identify scalar
     scalar_cols = []
@@ -526,8 +545,11 @@ def generate_plot(request: PlotRequest):
             else:
                 scale_str = "\n    + scale_y_log10()"
 
-        code_snippet = f'''
-gg = (
+        filter_code_str = ""
+        if request.filter_column and request.filter_operator and request.filter_value is not None:
+            filter_code_str = f'# Apply filter\ndf = df[df["{request.filter_column}"] {request.filter_operator} {request.filter_value}]\n\n'
+
+        code_snippet = f'''{filter_code_str}gg = (
     ggplot(df)
     + aes({aes_str})
     + {geom_str}{scale_str}

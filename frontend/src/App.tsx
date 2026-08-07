@@ -10,13 +10,13 @@ const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
 
 function App() {
-  const [analysisConfig, setAnalysisConfig] = useState<{table: string, cols: string[]} | null>(null);
+  const [analysisConfig, setAnalysisConfig] = useState<{table: string, cols: string[], scalarCols: string[]} | null>(null);
 
   const [recommendations, setRecommendations] = useState<RecommendationResponse | null>(null);
   const [isRecommending, setIsRecommending] = useState<boolean>(false);
 
-  const handleAnalyze = (tableName: string, columns: string[]) => {
-    setAnalysisConfig({ table: tableName, cols: columns });
+  const handleAnalyze = (tableName: string, columns: string[], scalarColumns: string[]) => {
+    setAnalysisConfig({ table: tableName, cols: columns, scalarCols: scalarColumns });
   };
 
   useEffect(() => {
@@ -73,7 +73,7 @@ function App() {
             <Col span={24}>
               <Spin spinning={isRecommending} description="Waiting for recommendation engine feedback...">
                 {recommendations ? (
-                  <ChartConfigurator tableName={analysisConfig.table} columns={analysisConfig.cols} recommendations={recommendations} />
+                  <ChartConfigurator tableName={analysisConfig.table} columns={analysisConfig.cols} scalarColumns={analysisConfig.scalarCols} recommendations={recommendations} />
                 ) : (
                   <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px' }}>
                     <Text type="secondary">Waiting for recommendation engine feedback...</Text>

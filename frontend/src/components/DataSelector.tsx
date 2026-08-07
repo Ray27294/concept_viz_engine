@@ -6,7 +6,7 @@ import type { TableMetadata } from '../types';
 const { Title, Text } = Typography;
 
 interface DataSelectorProps {
-  onAnalyze: (tableName: string, columns: string[]) => void;
+  onAnalyze: (tableName: string, columns: string[], scalarColumns: string[]) => void;
 }
 
 export const DataSelector: React.FC<DataSelectorProps> = ({ onAnalyze }) => {
@@ -48,7 +48,11 @@ export const DataSelector: React.FC<DataSelectorProps> = ({ onAnalyze }) => {
   // 3. When the user clicks the submit button
   const handleSubmit = () => {
     if (selectedTable && selectedColumns.length > 0) {
-      onAnalyze(selectedTable, selectedColumns);
+      const scalarCols = currentTableData?.columns
+        .filter(c => selectedColumns.includes(c.name) && c.semantic_type === 'scalar')
+        .map(c => c.name) || [];
+        
+      onAnalyze(selectedTable, selectedColumns, scalarCols);
     }
     console.log("Data to be sent to the backend:", {
       table_name: selectedTable,

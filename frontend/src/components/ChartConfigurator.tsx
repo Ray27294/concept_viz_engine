@@ -8,10 +8,11 @@ const { Title, Text } = Typography;
 interface ChartConfiguratorProps {
   tableName: string;
   columns: string[];
+  scalarColumns: string[];
   recommendations: RecommendationResponse;
 }
 
-export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName, columns, recommendations }) => {
+export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName, columns, scalarColumns, recommendations }) => {
   const [selectedGeom, setSelectedGeom] = useState<string | null>(null);
   const [selectedStat, setSelectedStat] = useState<string | null>(null);
   const [limitMethod, setLimitMethod] = useState<string>('top');
@@ -21,6 +22,9 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [chartHtml, setChartHtml] = useState<string | null>(null);
   const [chartCode, setChartCode] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
+  const [filterColumn, setFilterColumn] = useState<string | null>(null);
+  const [filterOperator, setFilterOperator] = useState<string>('>');
+  const [filterValue, setFilterValue] = useState<number | null>(null);
 
   // When the user selects a new table or columns, reset the Geom and Stat selections to null
   useEffect(() => {
@@ -29,6 +33,9 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setLogScale(false);
     setChartHtml(null);
     setChartCode(null);
+    setFilterColumn(null);
+    setFilterOperator('>');
+    setFilterValue(null);
   }, [recommendations]);
 
   // If the user has selected a Stat, find out which Geoms are valid
@@ -91,7 +98,10 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         limit_method: limitMethod,
         limit_count: limitCount,
         log_scale: logScale,
-        chart_name: matchedChartName || "" // Pass the matched chart name to the backend
+        chart_name: matchedChartName || "", // Pass the matched chart name to the backend
+        filter_column: filterColumn,
+        filter_operator: filterOperator,
+        filter_value: filterValue
       });
       setChartHtml(res.html);
       setChartCode(res.code || null);
@@ -140,6 +150,46 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
 
       {matchedChartName && (
           <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+            <Row gutter={24} style={{ marginBottom: '16px' }}>
+              <Col span={24}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Text strong>Data Filter (Optional)</Text>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Select 
+                      allowClear
+                      placeholder={scalarColumns.length > 0 ? "Select Column to Filter..." : "No scalar columns to filter"}
+                      value={filterColumn}
+                      onChange={(val) => { setFilterColumn(val); setFilterValue(null); }}
+                      style={{ width: '40%' }}
+                      disabled={scalarColumns.length === 0}
+                      options={scalarColumns.map(c => ({ label: `${c}`, value: c }))}
+                    />
+                    <Select 
+                      value={filterOperator}
+                      onChange={setFilterOperator}
+                      style={{ width: '20%' }}
+                      disabled={!filterColumn}
+                      options={[
+                        { label: '> Greater than', value: '>' },
+                        { label: '>= Greater or equal', value: '>=' },
+                        { label: '< Less than', value: '<' },
+                        { label: '<= Less or equal', value: '<=' },
+                        { label: '== Equal', value: '==' },
+                        { label: '!= Not equal', value: '!=' },
+                      ]}
+                    />
+                    <InputNumber 
+                      placeholder="Enter value"
+                      value={filterValue}
+                      onChange={(val) => setFilterValue(val)}
+                      style={{ width: '40%' }}
+                      disabled={!filterColumn}
+                    />
+                  </Space.Compact>
+                </Space>
+              </Col>
+            </Row>
+
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
