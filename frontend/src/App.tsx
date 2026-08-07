@@ -43,41 +43,46 @@ function App() {
   
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f0f2f5' }}>
-      <Content style={{ padding: '40px 50px', maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '40px 50px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
 
         <div style={{ marginBottom: '40px', textAlign: 'center' }}>
           <Title level={2}>📊 Concept Viz Engine</Title>
           <Paragraph type="secondary">
+            Automated Grammar of Graphics Discovery System
           </Paragraph>
         </div>
 
         <Row gutter={24}>
-          <Col xs={24} md={10} lg={8}>
+          <Col xs={24} lg={8}>
             <DataSelector onAnalyze={handleAnalyze} />
           </Col>
           
-          <Col xs={24} md={14} lg={16}>
+          <Col xs={24} lg={16}>
             {!analysisConfig ? (
-               <div style={{ height: '400px', backgroundColor: '#fff', borderRadius: '8px', border: '1px dashed #d9d9d9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+               <div style={{ height: '100%', minHeight: '300px', backgroundColor: '#fff', borderRadius: '8px', border: '1px dashed #d9d9d9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                  <Typography.Text type="secondary">👈 Please select a table and columns to visualise...</Typography.Text>
                </div>
             ) : (
-               <>
-                 <DataPreview tableName={analysisConfig.table} columns={analysisConfig.cols} />
-                 
-                 <Spin spinning={isRecommending} description="Waiting for recommendation engine feedback...">
-                   {recommendations ? (
-                     <ChartConfigurator tableName={analysisConfig.table} columns={analysisConfig.cols} recommendations={recommendations} />
-                   ) : (
-                     <div style={{ padding: '20px', textAlign: 'center' }}>
-                       <Text type="secondary">Waiting for recommendation engine feedback...</Text>
-                     </div>
-                   )}
-                 </Spin>
-               </>
+               <DataPreview tableName={analysisConfig.table} columns={analysisConfig.cols} />
             )}
           </Col>
         </Row>
+
+        {analysisConfig && (
+          <Row gutter={24} style={{ marginTop: '24px' }}>
+            <Col span={24}>
+              <Spin spinning={isRecommending} description="Waiting for recommendation engine feedback...">
+                {recommendations ? (
+                  <ChartConfigurator tableName={analysisConfig.table} columns={analysisConfig.cols} recommendations={recommendations} />
+                ) : (
+                  <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#fff', borderRadius: '8px' }}>
+                    <Text type="secondary">Waiting for recommendation engine feedback...</Text>
+                  </div>
+                )}
+              </Spin>
+            </Col>
+          </Row>
+        )}
 
       </Content>
     </Layout>

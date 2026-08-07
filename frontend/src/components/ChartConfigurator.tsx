@@ -19,6 +19,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [logScale, setLogScale] = useState<boolean>(false);
 
   const [chartHtml, setChartHtml] = useState<string | null>(null);
+  const [chartCode, setChartCode] = useState<string | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
 
   // When the user selects a new table or columns, reset the Geom and Stat selections to null
@@ -27,6 +28,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setSelectedStat(null);
     setLogScale(false);
     setChartHtml(null);
+    setChartCode(null);
   }, [recommendations]);
 
   // If the user has selected a Stat, find out which Geoms are valid
@@ -92,6 +94,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         chart_name: matchedChartName || "" // Pass the matched chart name to the backend
       });
       setChartHtml(res.html);
+      setChartCode(res.code || null);
       message.success("Plot generated successfully!");
     } catch (error) {
       message.error("Failed to generate plot. Please check the backend server.");
@@ -205,15 +208,75 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
       </div>
     </Card>
 
-    {chartHtml && (
-        <Card style={{ marginTop: '20px', borderRadius: '8px', padding: 0, overflow: 'hidden' }}>
-          <iframe 
-            title="Interactive Chart"
-            srcDoc={chartHtml} 
-            sandbox="allow-scripts"
-            style={{ width: '100%', height: '500px', border: 'none', display: 'block' }} 
-          />
-        </Card>
+    {(chartHtml || chartCode) && (
+        <Row gutter={24} style={{ marginTop: '20px', display: 'flex', alignItems: 'stretch' }}>
+          {chartCode && (
+            <Col xs={24} lg={8} style={{ display: 'flex', flexDirection: 'column' }}>
+              <Card 
+                title="ggplot Code Snippet" 
+                style={{ 
+                  borderRadius: '8px', 
+                  flex: 1, 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  border: '1px solid #e8e8e8'
+                }}
+                styles={{ body: { padding: 0, flex: 1 } }}
+              >
+                <pre style={{ 
+                  backgroundColor: '#282c34',
+                  color: '#edeef0',
+                  padding: '24px', 
+                  margin: 0,
+                  overflowX: 'auto',
+                  overflowY: 'auto',
+                  fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                  fontSize: '13.5px',
+                  lineHeight: '1.6',
+                  height: '500px', 
+                  textAlign: 'left',
+                  borderBottomLeftRadius: '8px',
+                  borderBottomRightRadius: '8px',
+                  border: 'none'
+                }}>
+                  <code style={{ 
+                    backgroundColor: 'transparent',
+                    color: 'inherit',
+                    padding: 0,
+                    margin: 0,
+                    border: 'none',
+                    display: 'block'
+                  }}>
+                    {chartCode}
+                  </code>
+                </pre>
+              </Card>
+            </Col>
+          )}
+
+          {chartHtml && (
+            <Col xs={24} lg={chartCode ? 16 : 24} style={{ display: 'flex', flexDirection: 'column' }}>
+              <Card 
+                style={{ 
+                  borderRadius: '8px', 
+                  overflow: 'hidden', 
+                  flex: 1,
+                  display: 'flex', 
+                  flexDirection: 'column'
+                }}
+                styles={{ body: { padding: 0, flex: 1 } }}
+              >
+                <iframe 
+                  title="Interactive Chart"
+                  srcDoc={chartHtml} 
+                  sandbox="allow-scripts"
+                  style={{ width: '100%', height: '500px', border: 'none', display: 'block' }} 
+                />
+              </Card>
+            </Col>
+          )}
+
+        </Row>
     )}
     </>
   );

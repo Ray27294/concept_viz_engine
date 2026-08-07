@@ -39,13 +39,13 @@ def recommend_components(
             combinations.append(ChartCombination(chart_name="Bar Chart", geom="col", stat="identity"))
             combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
             combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))
-            combinations.append(ChartCombination(chart_name="Density Plot", geom="area", stat="density"))
+            combinations.append(ChartCombination(chart_name="Density Plot", geom="density", stat="density"))
             if is_geo:
                 combinations.append(ChartCombination(chart_name="Choropleth Map", geom="map", stat="identity"))
         if num_scalars == 1 and num_lexical == 1:
             combinations.append(ChartCombination(chart_name="Histogram", geom="bar", stat="bin"))
             combinations.append(ChartCombination(chart_name="Frequency Polygon", geom="line", stat="bin"))
-            combinations.append(ChartCombination(chart_name="Density Plot", geom="area", stat="density"))
+            combinations.append(ChartCombination(chart_name="Density Plot", geom="density", stat="density"))
         if num_scalars == 2 and num_lexical == 0:
             combinations.append(ChartCombination(chart_name="Scatter Diagram", geom="point", stat="identity"))
         if num_scalars in [3, 4] and num_lexical == 0:

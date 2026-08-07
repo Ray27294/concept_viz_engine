@@ -182,7 +182,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
 
-        elif request.geom == "area" and request.stat == "density":
+        elif request.geom == "density" and request.stat == "density":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             if group_col:
                 mapping = aes(x=x_col, fill=group_col)
@@ -431,10 +431,115 @@ def generate_plot(request: PlotRequest):
         else:
             raise ValueError(f"Currently not supported: geom={request.geom}, stat={request.stat}")
 
+        # generate ggplot code
+        c_x = locals().get('x_col', '...')
+        c_y = locals().get('y_col', '...')
+        c_group = locals().get('group_col', None)
+        c_fill = locals().get('fill_col', None)
+        
+        aes_elements = []
+        if c_x != '...': aes_elements.append(f'x="{c_x}"')
+        
+        if request.stat != "bin" and request.geom != "density":
+            if c_y != '...': aes_elements.append(f'y="{c_y}"')
+        
+        if request.geom in ["col", "boxplot", "violin", "tile", "map", "histogram", "density"]:
+            if c_fill: 
+                aes_elements.append(f'fill="{c_fill}"')
+            elif c_group: 
+                aes_elements.append(f'fill="{c_group}"')
+            elif request.geom == "map": 
+                aes_elements.append(f'fill="{c_y}"')
+        elif request.geom in ["line", "pointrange"]:
+            if c_group: 
+                aes_elements.append(f'color="{c_group}"')
+                
+        if request.geom == "point" and request.stat == "identity":
+            if len(scalar_cols) == 3:
+                aes_elements.append(f'color="{scalar_cols[2]}"')
+                aes_elements.append(f'size="{scalar_cols[2]}"')
+            elif len(scalar_cols) >= 4:
+                aes_elements.append(f'size="{scalar_cols[2]}"')
+                aes_elements.append(f'color="{scalar_cols[3]}"')
+
+        aes_str = ", ".join(aes_elements)
+        
+        geom_str = f"geom_{request.geom}()"
+        
+        if request.geom == "col":
+            if "Stacked" in request.chart_name: 
+                geom_str = 'geom_col(position="stack", alpha=0.9)'
+            elif "Grouped" in request.chart_name: 
+                geom_str = 'geom_col(position="dodge", alpha=0.9)'
+            else: 
+                geom_str = 'geom_col(fill="#1890ff", alpha=0.8)'
+                
+        elif request.geom == "bar" and request.stat == "bin":
+            if c_group:
+                geom_str = 'geom_histogram(bins=30, alpha=0.7, position="identity")'
+            else:
+                geom_str = 'geom_histogram(bins=30, fill="#52c41a", alpha=0.8, color="green")'
+                
+        elif request.geom == "line" and request.stat == "bin":
+            if c_group:
+                geom_str = 'geom_line(stat="bin", bins=30, size=1.2)'
+            else:
+                geom_str = 'geom_line(stat="bin", bins=30, color="#fa8c16", size=1.2)'
+                
+        elif request.geom == "density" and request.stat == "density":
+            if c_group:
+                geom_str = 'geom_density(alpha=0.5)'
+            else:
+                geom_str = 'geom_density(fill="#722ed1", alpha=0.6, color="#531dab")'
+                
+        elif request.geom == "point":
+            geom_str = 'geom_point(alpha=0.7)'
+            
+        elif request.geom == "boxplot":
+            geom_str = 'geom_boxplot(alpha=0.8, outlier_color="red")'
+            
+        elif request.geom == "violin":
+            geom_str = 'geom_violin(alpha=0.8, draw_quantiles=[0.25, 0.5, 0.75], scale="width")'
+            
+        elif request.geom == "pointrange":
+            geom_str = 'geom_pointrange(stat="summary", fun_y=np.mean, fun_ymin=np.min, fun_ymax=np.max, size=1, alpha=0.8)'
+            
+        elif request.geom == "tile":
+            if request.stat == "bin_2d":
+                geom_str = 'geom_bin2d(bins=20)'
+            else:
+                geom_str = 'geom_tile(color="white", size=0.5)'
+                
+        elif request.geom == "map":
+            geom_str = 'geom_map(color="black", size=0.2)'
+            
+        scale_str = ""
+        if request.log_scale:
+            if request.geom == "map" or (request.geom == "tile" and request.stat == "identity"):
+                scale_str = "\n    + scale_fill_continuous(trans='log10')"
+            elif request.geom == "point" or request.stat == "bin_2d":
+                scale_str = "\n    + scale_x_log10()\n    + scale_y_log10()"
+            elif request.geom in ["bar", "line", "density"] and request.stat in ["bin", "density"]:
+                scale_str = "\n    + scale_x_log10()"
+            elif request.geom == "col" and "Bar" in request.chart_name and "Grouped" not in request.chart_name and "Stacked" not in request.chart_name:
+                scale_str = "\n    + scale_y_log10()"
+            else:
+                scale_str = "\n    + scale_y_log10()"
+
+        code_snippet = f'''
+gg = (
+    ggplot(df)
+    + aes({aes_str})
+    + {geom_str}{scale_str}
+    + theme_{"void" if request.geom == "map" else "minimal"}()
+    + theme(axis_text_x=element_text(rotation=45, hjust=1))
+)
+
+print(gg)'''
         # generate HTML string for the plot
         html_string = interactive(gg) + to_html()
         
-        return {"html": html_string}
+        return {"html": html_string, "code": code_snippet}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate plot: {str(e)}")

@@ -38,6 +38,7 @@ export interface PlotRequest {
 
 export interface PlotResponse {
   html: string;
+  code?: string;
 }
 
 export const fetchChartHtml = async (
