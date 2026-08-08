@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber } from 'antd';
-import { fetchChartHtml } from '../services/api';
-import type { RecommendationResponse } from '../types';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber, Input } from 'antd';
+import { fetchChartHtml, fetchMetadata, type DimensionLookup } from '../services/api';
+import type { RecommendationResponse, TableMetadata } from '../types';
 
 const { Title, Text } = Typography;
 
@@ -25,6 +25,43 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [filterOperator, setFilterOperator] = useState<string>('>');
   const [filterValue, setFilterValue] = useState<number | null>(null);
+  const [xAxisCol, setXAxisCol] = useState<string | null>(null);
+  const [lookups, setLookups] = useState<DimensionLookup[]>([]);
+  const [dbMetadata, setDbMetadata] = useState<TableMetadata[]>([]);
+
+  // Metadata fetching for alternative key lookup options
+  useEffect(() => {
+    const loadMeta = async () => {
+      try {
+        const data = await fetchMetadata();
+        setDbMetadata(data);
+      } catch (error) {
+        console.error("Failed to fetch metadata for dimension lookup options");
+      }
+    };
+    loadMeta();
+  }, []);
+
+  // Functions to manage alternative key lookups
+  const addLookup = () => {
+    setLookups([...lookups, { local_column: '', target_table: '', target_join_key: '', target_display_col: '' }]);
+  };
+  const removeLookup = (index: number) => {
+    setLookups(lookups.filter((_, i) => i !== index));
+  };
+  const updateLookup = (index: number, field: keyof DimensionLookup, value: string) => {
+    const newLookups = [...lookups];
+    newLookups[index][field] = value;
+    setLookups(newLookups);
+  };
+
+  const handleTargetTableChange = (index: number, newTable: string) => {
+    const newLookups = [...lookups];
+    newLookups[index].target_table = newTable;
+    newLookups[index].target_join_key = '';
+    newLookups[index].target_display_col = '';
+    setLookups(newLookups);
+  };
 
   // When the user selects a new table or columns, reset the Geom and Stat selections to null
   useEffect(() => {
@@ -36,7 +73,13 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setFilterColumn(null);
     setFilterOperator('>');
     setFilterValue(null);
+    setXAxisCol(null);
+    setLookups([]);
   }, [recommendations]);
+
+  const lexicalColumns = useMemo(() => {
+    return columns.filter(c => !scalarColumns.includes(c));
+  }, [columns, scalarColumns]);
 
   // If the user has selected a Stat, find out which Geoms are valid
   const allowedGeoms = useMemo(() => {
@@ -101,7 +144,9 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         chart_name: matchedChartName || "", // Pass the matched chart name to the backend
         filter_column: filterColumn,
         filter_operator: filterOperator,
-        filter_value: filterValue
+        filter_value: filterValue,
+        x_axis_col: xAxisCol,
+        lookups: lookups.filter(lk => lk.local_column && lk.target_table)
       });
       setChartHtml(res.html);
       setChartCode(res.code || null);
@@ -189,6 +234,90 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                 </Space>
               </Col>
             </Row>
+
+            {lexicalColumns.length > 0 && matchedChartName === "Bar Chart" && (
+              <Row gutter={24} style={{ marginBottom: '16px' }}>
+                <Col span={24}>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <Text strong>Alternative Key</Text>
+                    <Select 
+                      allowClear
+                      placeholder="Default (Primary Key)"
+                      value={xAxisCol}
+                      onChange={setXAxisCol}
+                      style={{ width: '40%' }}
+                      options={lexicalColumns.map(c => ({ label: `${c}`, value: c }))}
+                    />
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Select a candidate key to replace the default primary key on the axis.
+                    </Text>
+                  </Space>
+                </Col>
+              </Row>
+            )}
+
+            {lexicalColumns.length > 0 && !recommendations.pattern.includes("Basic Entity") && (
+              <Row gutter={24} style={{ marginBottom: '16px' }}>
+                <Col span={24}>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text strong>Alternative Key Lookup (Foreign Key Tracing)</Text>
+                      <Button size="small" type="dashed" onClick={addLookup}>+ Add Lookup Rule</Button>
+                    </div>
+                    {lookups.length > 0 && (
+                      <div style={{ padding: '10px', backgroundColor: '#f0f2f5', borderRadius: '6px' }}>
+                        {lookups.map((lookup, index) => (
+                          <Space.Compact style={{ width: '100%', marginBottom: index === lookups.length - 1 ? 0 : '8px' }} key={index}>
+                            <Select 
+                              placeholder="Local FK Col" 
+                              value={lookup.local_column || undefined} 
+                              onChange={(v) => updateLookup(index, 'local_column', v)} 
+                              style={{ width: '22%' }} 
+                              options={lexicalColumns.map(c => ({ label: c, value: c }))} 
+                            />
+                            <Select 
+                              placeholder="Target Table (e.g. country)" 
+                              value={lookup.target_table || undefined} 
+                              onChange={(v) => handleTargetTableChange(index, v)} 
+                              style={{ width: '26%' }}
+                              showSearch
+                              options={dbMetadata.map(t => ({ label: `📊 ${t.table_name}`, value: t.table_name }))}
+                            />
+                            <Select 
+                              placeholder="Target Join Key (e.g. code)" 
+                              value={lookup.target_join_key || undefined} 
+                              onChange={(v) => updateLookup(index, 'target_join_key', v)} 
+                              style={{ width: '22%' }}
+                              showSearch
+                              disabled={!lookup.target_table}
+                              options={
+                                dbMetadata
+                                  .find(t => t.table_name === lookup.target_table)?.columns
+                                  .map(c => ({ label: c.name, value: c.name })) || []
+                              }
+                            />
+                            <Select 
+                              placeholder="Target Display Col (e.g. name)" 
+                              value={lookup.target_display_col || undefined} 
+                              onChange={(v) => updateLookup(index, 'target_display_col', v)} 
+                              style={{ width: '26%' }}
+                              showSearch
+                              disabled={!lookup.target_table}
+                              options={
+                                dbMetadata
+                                  .find(t => t.table_name === lookup.target_table)?.columns
+                                  .map(c => ({ label: c.name, value: c.name })) || []
+                              }
+                            />
+                            <Button danger onClick={() => removeLookup(index)}>X</Button>
+                          </Space.Compact>
+                        ))}
+                      </div>
+                    )}
+                  </Space>
+                </Col>
+              </Row>
+            )}
 
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}

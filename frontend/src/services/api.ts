@@ -25,6 +25,13 @@ export const fetchRecommendations = async (
   return response.data;
 };
 
+export interface DimensionLookup {
+  local_column: string;
+  target_table: string;
+  target_join_key: string;
+  target_display_col: string;
+}
+
 export interface PlotRequest {
   table_name: string;
   selected_columns: string[];
@@ -37,6 +44,8 @@ export interface PlotRequest {
   filter_column?: string | null;
   filter_operator?: string;
   filter_value?: number | null;
+  x_axis_col?: string | null;
+  lookups?: DimensionLookup[];
 }
 
 export interface PlotResponse {

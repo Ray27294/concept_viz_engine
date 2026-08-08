@@ -27,6 +27,12 @@ def get_world_map():
             raise HTTPException(status_code=500, detail="Geopandas is required for map plotting. Please install geopandas.")
     return _world_map_cache.copy()
 
+class DimensionLookup(BaseModel):
+    local_column: str          # column in the current table (e.g., country)
+    target_table: str          # target parent table (e.g., country)
+    target_join_key: str       # primary key of the target table (e.g., code)
+    target_display_col: str    # candidate key/display column of the target table (e.g., name)
+
 class PlotRequest(BaseModel):
     table_name: str
     selected_columns: List[str]
@@ -39,6 +45,8 @@ class PlotRequest(BaseModel):
     filter_column: Optional[str] = None
     filter_operator: Optional[str] = None
     filter_value: Optional[float] = None
+    x_axis_col: Optional[str] = None
+    lookups: Optional[List[DimensionLookup]] = []
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -90,6 +98,27 @@ def generate_plot(request: PlotRequest):
             
             if df.empty:
                 raise HTTPException(status_code=400, detail=f"No data remaining after applying filter: {col} {op} {val}")
+
+    if request.lookups:
+        try:
+            for lk in request.lookups:
+                # Find the primary key and the display column in the target table
+                lookup_query = f'SELECT "{lk.target_join_key}", "{lk.target_display_col}" AS "_display" FROM public."{lk.target_table}"'
+                df_lookup = pd.read_sql_query(lookup_query, engine)
+                
+                # Perform a left join
+                df = df.merge(df_lookup, left_on=lk.local_column, right_on=lk.target_join_key, how="left")
+                
+                # replace the local foreign key with the display column
+                df[lk.local_column] = df["_display"].fillna(df[lk.local_column])
+                
+                # Cleanup temporary columns
+                cols_to_drop = ["_display"]
+                if lk.target_join_key != lk.local_column and lk.target_join_key in df.columns:
+                    cols_to_drop.append(lk.target_join_key)
+                df = df.drop(columns=cols_to_drop, errors='ignore')
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed during dimension lookup: {str(e)}")
 
     # identify scalar
     scalar_cols = []
@@ -152,7 +181,7 @@ def generate_plot(request: PlotRequest):
                     gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
             else:
-                x_col = pk_names[0] if pk_names else columns_to_fetch[0]
+                x_col = request.x_axis_col if request.x_axis_col else (pk_names[0] if pk_names else columns_to_fetch[0])
                 title_prefix = ""
                 if len(df) > request.limit_count:
                     if request.limit_method == "top":

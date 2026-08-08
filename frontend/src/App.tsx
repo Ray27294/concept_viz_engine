@@ -47,9 +47,6 @@ function App() {
 
         <div style={{ marginBottom: '40px', textAlign: 'center' }}>
           <Title level={2}>📊 Concept Viz Engine</Title>
-          <Paragraph type="secondary">
-            Automated Grammar of Graphics Discovery System
-          </Paragraph>
         </div>
 
         <Row gutter={24}>
