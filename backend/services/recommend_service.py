@@ -65,6 +65,7 @@ def recommend_components(
 
     elif "One-to-Many" in pattern:
         if num_scalars == 1:
+            combinations.append(ChartCombination(chart_name="Tree Map", geom="treemap", stat="identity"))
             combinations.append(ChartCombination(chart_name="Boxplot", geom="boxplot", stat="boxplot"))
             combinations.append(ChartCombination(chart_name="Violin Plot", geom="violin", stat="ydensity"))
             combinations.append(ChartCombination(chart_name="Point Range", geom="pointrange", stat="summary"))
@@ -72,6 +73,7 @@ def recommend_components(
     elif "Many-to-Many" in pattern:
         if num_scalars + num_lexical <= 1:
             combinations.append(ChartCombination(chart_name="Heatmap Matrix", geom="tile", stat="identity"))
+            combinations.append(ChartCombination(chart_name="Sankey Diagram", geom="sankey", stat="identity"))
         if num_scalars == 2:
             combinations.append(ChartCombination(chart_name="2D Binning", geom="tile", stat="bin_2d"))
 

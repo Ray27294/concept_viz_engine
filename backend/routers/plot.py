@@ -10,6 +10,8 @@ from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line,
 from ninejs import interactive, to_html
 from database import engine
 from services.metadata_service import extract_database_metadata
+import plotly.express as px
+import plotly.graph_objects as go
 
 router = APIRouter(prefix="/plot", tags=["Plotting"])
 
@@ -83,6 +85,7 @@ def generate_plot(request: PlotRequest):
     if df.empty:
         raise HTTPException(status_code=400, detail="Data source is empty, cannot generate plot")
 
+    # Apply data filtering
     if request.filter_column and request.filter_operator and request.filter_value is not None:
         col = request.filter_column
         val = request.filter_value
@@ -99,6 +102,7 @@ def generate_plot(request: PlotRequest):
             if df.empty:
                 raise HTTPException(status_code=400, detail=f"No data remaining after applying filter: {col} {op} {val}")
 
+    # Apply alternative key replacement
     if request.lookups:
         try:
             for lk in request.lookups:
@@ -130,8 +134,127 @@ def generate_plot(request: PlotRequest):
         elif col_meta and col_meta.semantic_type == "lexical":
             lexical_cols.append(col_name)
 
-    # build the plot using plotnine
     try:
+        # ==========================================
+        # Plotly engine
+        # ==========================================
+        if request.geom in ["treemap", "sankey"]:
+            limit = request.limit_count
+            if request.geom == "treemap":
+                if len(lexical_cols) == 0 or not scalar_cols:
+                    raise HTTPException(status_code=400, detail="Tree Map requires at least one categorical (lexical) column for hierarchy and one scalar for size.")
+                
+                # parent node is foreign key, child node is the primary key
+                parent_col = lexical_cols[0]
+                child_col = pk_names[0] if pk_names else columns_to_fetch[0]
+                val_col = scalar_cols[0]
+
+                if df[parent_col].nunique() > limit:
+                    if request.limit_method == "top":
+                        top_parents = df.groupby(parent_col)[val_col].sum().nlargest(limit).index.tolist()
+                    elif request.limit_method == "bottom":
+                        top_parents = df.groupby(parent_col)[val_col].sum().nsmallest(limit).index.tolist()
+                    elif request.limit_method == "random":
+                        import random
+                        all_parents = df[parent_col].dropna().unique().tolist()
+                        top_parents = random.sample(all_parents, min(limit, len(all_parents)))
+                    elif request.limit_method == "distributed":
+                        sorted_parents = df.groupby(parent_col)[val_col].sum().sort_values(ascending=False).index.tolist()
+                        indices = np.linspace(0, len(sorted_parents) - 1, limit, dtype=int)
+                        top_parents = [sorted_parents[i] for i in indices]
+                    else:
+                        top_parents = df.groupby(parent_col)[val_col].sum().nlargest(limit).index.tolist()
+                    
+                    df = df[df[parent_col].isin(top_parents)]
+                
+                fig = px.treemap(df, path=[parent_col, child_col], values=val_col, 
+                                 title=f"Tree Map of {val_col} (Hierarchy: {parent_col} -> {child_col})")
+                if request.log_scale:
+                    fig.update_traces(marker=dict(colors=np.log10(df[val_col] + 1), colorscale='Viridis'))
+
+                code_snippet = f'''
+fig = px.treemap(df, 
+                 path=['{parent_col}', '{child_col}'], 
+                 values='{val_col}',
+                 title='Tree Map of {val_col}')
+fig.show()'''
+
+            elif request.geom == "sankey":
+                dims = pk_names + [c for c in lexical_cols if c not in pk_names]
+                if len(dims) < 2:
+                    raise HTTPException(status_code=400, detail="Sankey Diagram requires at least two categorical dimensions for source and target.")
+                
+                source_col = dims[0]
+                target_col = dims[1]
+                val_col = scalar_cols[0] if scalar_cols else None
+
+                def get_sampled_nodes(col_name):
+                    if request.limit_method == "top":
+                        return df[col_name].value_counts().nlargest(limit).index.tolist()
+                    elif request.limit_method == "bottom":
+                        return df[col_name].value_counts().nsmallest(limit).index.tolist()
+                    elif request.limit_method == "random":
+                        import random
+                        all_nodes = df[col_name].dropna().unique().tolist()
+                        return random.sample(all_nodes, min(limit, len(all_nodes)))
+                    else:
+                        return df[col_name].value_counts().nlargest(limit).index.tolist()
+
+                if df[source_col].nunique() > limit:
+                    top_src = get_sampled_nodes(source_col)
+                    df = df[df[source_col].isin(top_src)]
+                if df[target_col].nunique() > limit:
+                    top_tgt = get_sampled_nodes(target_col)
+                    df = df[df[target_col].isin(top_tgt)]
+                
+                all_nodes = list(pd.unique(df[[source_col, target_col]].values.ravel('K')))
+                node_map = {node: i for i, node in enumerate(all_nodes)}
+                
+                source_indices = df[source_col].map(node_map).tolist()
+                target_indices = df[target_col].map(node_map).tolist()
+                values = df[val_col].tolist() if val_col else [1] * len(df)
+                
+                palette = px.colors.qualitative.Plotly             
+                def hex_to_rgba(hex_code, opacity):
+                    hex_code = hex_code.lstrip('#')
+                    r, g, b = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+                    return f"rgba({r}, {g}, {b}, {opacity})"
+                node_colors = [hex_to_rgba(palette[i % len(palette)], 0.85) for i in range(len(all_nodes))]
+                link_colors = [hex_to_rgba(palette[src % len(palette)], 0.35) for src in source_indices]
+                fig = go.Figure(data=[go.Sankey(
+                    node = dict(pad=5, thickness=10, line=dict(color="black", width=0.5), label=all_nodes, color=node_colors),
+                    link = dict(source=source_indices, target=target_indices, value=values, color=link_colors)
+                )])
+                fig.update_layout(title_text=f"Sankey Flow: {source_col} to {target_col}", font_size=12)
+
+                code_snippet = f'''
+all_nodes = list(pd.unique(df[['{source_col}', '{target_col}']].values.ravel('K')))
+node_map = {{node: i for i, node in enumerate(all_nodes)}}
+
+source_indices = df['{source_col}'].map(node_map).tolist()
+target_indices = df['{target_col}'].map(node_map).tolist()
+values = df['{val_col}'].tolist() if '{val_col}' != 'None' else [1] * len(df)
+
+palette = px.colors.qualitative.Plotly
+def hex_to_rgba(hex_code, opacity):
+    hex_code = hex_code.lstrip('#')
+    r, g, b = tuple(int(hex_code[i:i+2], 16) for i in (0, 2, 4))
+    return f"rgba({{r}}, {{g}}, {{b}}, {{opacity}})"
+node_colors = [hex_to_rgba(palette[i % len(palette)], 0.85) for i in range(len(all_nodes))]
+link_colors = [hex_to_rgba(palette[src % len(palette)], 0.35) for src in source_indices]
+
+fig = go.Figure(data=[go.Sankey(
+    node = dict(label=all_nodes, pad=5, thickness=10, color=node_colors),
+    link = dict(source=source_indices, target=target_indices, value=values, color=link_colors)
+)])
+fig.show()'''
+
+            html_string = fig.to_html(full_html=False, include_plotlyjs='cdn')
+            return {"html": html_string, "code": code_snippet}
+
+        # ==========================================
+        # Plotnine (ggplot) engine
+        # ==========================================
         gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
 
         if request.stat in ["bin", "density"]:
@@ -208,6 +331,7 @@ def generate_plot(request: PlotRequest):
                 if request.log_scale:
                     gg = gg + scale_y_log10() + labs(y=f"Log-scaled {y_col}")
 
+        # Histogram
         elif request.geom == "bar" and request.stat == "bin":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             if group_col:
@@ -219,6 +343,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
 
+        # Frequency Polygon
         elif request.geom == "line" and request.stat == "bin":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             if group_col:
@@ -230,6 +355,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
 
+        # Density Plot
         elif request.geom == "density" and request.stat == "density":
             x_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             if group_col:
@@ -241,6 +367,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_x_log10() + labs(x=f"Log-scaled {x_col}")
 
+        # Choropleth Map
         elif request.geom == "map" and request.stat == "identity":
             x_col = pk_names[0] if pk_names else columns_to_fetch[0]
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
@@ -271,6 +398,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_fill_continuous(trans='log10') + labs(fill=f"Log-scaled {y_col}")
 
+        # Scatter Diagram and Bubble Chart
         elif request.geom == "point" and request.stat == "identity":
             x_col = scalar_cols[0]
             y_col = scalar_cols[1]
@@ -300,6 +428,7 @@ def generate_plot(request: PlotRequest):
             if request.log_scale:
                 gg = gg + scale_x_log10() + scale_y_log10() + labs(x=f"Log-scaled {x_col}", y=f"Log-scaled {y_col}")
 
+        # Line Chart
         elif request.geom == "line" and request.stat == "identity":
             y_col = scalar_cols[0] if scalar_cols else request.selected_columns[0]
             group_col = "Entity_Group"

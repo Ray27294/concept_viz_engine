@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber, Input } from 'antd';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber } from 'antd';
 import { fetchChartHtml, fetchMetadata, type DimensionLookup } from '../services/api';
 import type { RecommendationResponse, TableMetadata } from '../types';
 
@@ -322,7 +322,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
-                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix"].includes(matchedChartName) ? (
+                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix", "Tree Map", "Sankey Diagram"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
                     <Space.Compact style={{ width: '100%' }}>
