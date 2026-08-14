@@ -235,7 +235,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
               </Col>
             </Row>
 
-            {lexicalColumns.length > 0 && matchedChartName === "Bar Chart" && (
+            {lexicalColumns.length > 0 && ["Word Cloud", "Bar Chart"].includes(matchedChartName) && (
               <Row gutter={24} style={{ marginBottom: '16px' }}>
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -322,7 +322,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
             <Row gutter={24}>
               {/* If it's a bar chart or a line chart, show sampling method options */}
               <Col span={12}>
-                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix", "Tree Map", "Sankey Diagram"].includes(matchedChartName) ? (
+                {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix", "Tree Map", "Sankey Diagram", "Word Cloud"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <Text strong>Sampling Method</Text>
                     <Space.Compact style={{ width: '100%' }}>

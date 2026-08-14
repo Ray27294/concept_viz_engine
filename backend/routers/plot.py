@@ -251,6 +251,69 @@ fig.show()'''
 
             html_string = fig.to_html(full_html=False, include_plotlyjs='cdn')
             return {"html": html_string, "code": code_snippet}
+            
+        elif request.geom == "wordcloud":
+            limit = request.limit_count
+            import io
+            import base64
+            from wordcloud import WordCloud
+            
+            word_col = request.x_axis_col if request.x_axis_col else (pk_names[0] if pk_names else columns_to_fetch[0])
+            
+            if not scalar_cols:
+                raise HTTPException(status_code=400, detail="Word Cloud requires at least one scalar column to define word frequencies (sizes).")
+            freq_col = scalar_cols[0]
+            
+            if df[word_col].nunique() > limit:
+                if request.limit_method == "top":
+                    top_words = df.groupby(word_col)[freq_col].sum().nlargest(limit).index.tolist()
+                elif request.limit_method == "bottom":
+                    top_words = df.groupby(word_col)[freq_col].sum().nsmallest(limit).index.tolist()
+                elif request.limit_method == "random":
+                    import random
+                    all_words = df[word_col].dropna().unique().tolist()
+                    top_words = random.sample(all_words, min(limit, len(all_words)))
+                else:
+                    top_words = df.groupby(word_col)[freq_col].sum().nlargest(limit).index.tolist()
+                df = df[df[word_col].isin(top_words)]
+            
+            freq_dict = dict(zip(df[word_col].astype(str), df[freq_col]))
+            
+            wc = WordCloud(
+                width=900, 
+                height=700, 
+                background_color='white', 
+                colormap='prism',
+                max_words=limit,
+                contour_width=0,
+                prefer_horizontal=0.8
+            )
+            wc.generate_from_frequencies(freq_dict)
+            
+            img_io = io.BytesIO()
+            wc.to_image().save(img_io, format='PNG')
+            img_base64 = base64.b64encode(img_io.getvalue()).decode('utf-8')
+            
+            html_string = f'''
+            <div style="display: flex; justify-content: center; align-items: center; width: 100%; height: 100%; background-color: #ffffff; overflow: hidden;">
+                <img src="data:image/png;base64,{img_base64}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);" />
+            </div>
+            '''
+            
+            code_snippet = f'''
+freq_dict = dict(zip(df['{word_col}'].astype(str), df['{freq_col}']))
+
+wc = WordCloud(
+width=900, height=500, 
+background_color='white', 
+colormap='prism',
+max_words={limit},
+prefer_horizontal=0.8
+)
+wc.generate_from_frequencies(freq_dict)
+'''
+
+            return {"html": html_string, "code": code_snippet}
 
         # ==========================================
         # Plotnine (ggplot) engine

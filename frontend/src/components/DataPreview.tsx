@@ -56,7 +56,7 @@ export const DataPreview: React.FC<DataPreviewProps> = ({ tableName, columns }) 
     <Card 
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Title level={5} style={{ margin: 0 }}>Data Preview (Top {previewLimit} Rows)</Title>
+          <Title level={5} style={{ margin: 0 }}>Data Preview (First {previewLimit} Rows in this table)</Title>
           <Space>
             <Text type="secondary" style={{ fontSize: '14px', fontWeight: 'normal' }}>
               Preview Rows:
