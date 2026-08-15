@@ -77,7 +77,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setLookups([]);
   }, [recommendations]);
 
-  const lexicalColumns = useMemo(() => {
+  const discreteColumns = useMemo(() => {
     return columns.filter(c => !scalarColumns.includes(c));
   }, [columns, scalarColumns]);
 
@@ -235,7 +235,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
               </Col>
             </Row>
 
-            {lexicalColumns.length > 0 && ["Word Cloud", "Bar Chart"].includes(matchedChartName) && (
+            {discreteColumns.length > 0 && ["Word Cloud", "Bar Chart"].includes(matchedChartName) && (
               <Row gutter={24} style={{ marginBottom: '16px' }}>
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -246,7 +246,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                       value={xAxisCol}
                       onChange={setXAxisCol}
                       style={{ width: '40%' }}
-                      options={lexicalColumns.map(c => ({ label: `${c}`, value: c }))}
+                      options={discreteColumns.map(c => ({ label: `${c}`, value: c }))}
                     />
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       Select a candidate key to replace the default primary key on the axis.
@@ -256,7 +256,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
               </Row>
             )}
 
-            {lexicalColumns.length > 0 && !recommendations.pattern.includes("Basic Entity") && (
+            {discreteColumns.length > 0 && !recommendations.pattern.includes("Basic Entity") && (
               <Row gutter={24} style={{ marginBottom: '16px' }}>
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -273,7 +273,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                               value={lookup.local_column || undefined} 
                               onChange={(v) => updateLookup(index, 'local_column', v)} 
                               style={{ width: '22%' }} 
-                              options={lexicalColumns.map(c => ({ label: c, value: c }))} 
+                              options={discreteColumns.map(c => ({ label: c, value: c }))} 
                             />
                             <Select 
                               placeholder="Target Table (e.g. country)" 

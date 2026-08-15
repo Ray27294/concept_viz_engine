@@ -10,7 +10,7 @@ class TableMetadata(BaseModel):
 class Column(BaseModel):
     name: str
     type: str
-    semantic_type: str # numeric, temporal or lexical
+    semantic_type: str # numeric, temporal or discrete
 
 class TableColumnGroup(BaseModel):
     table_name: str

@@ -126,13 +126,13 @@ def generate_plot(request: PlotRequest):
 
     # identify scalar
     scalar_cols = []
-    lexical_cols = []
+    discrete_cols = []
     for col_name in request.selected_columns:
         col_meta = next((c for c in table_meta.columns if c.name == col_name), None)
         if col_meta and col_meta.semantic_type == "scalar":
             scalar_cols.append(col_name)
-        elif col_meta and col_meta.semantic_type == "lexical":
-            lexical_cols.append(col_name)
+        elif col_meta and col_meta.semantic_type == "discrete":
+            discrete_cols.append(col_name)
 
     try:
         # ==========================================
@@ -141,11 +141,11 @@ def generate_plot(request: PlotRequest):
         if request.geom in ["treemap", "sankey"]:
             limit = request.limit_count
             if request.geom == "treemap":
-                if len(lexical_cols) == 0 or not scalar_cols:
-                    raise HTTPException(status_code=400, detail="Tree Map requires at least one categorical (lexical) column for hierarchy and one scalar for size.")
+                if len(discrete_cols) == 0 or not scalar_cols:
+                    raise HTTPException(status_code=400, detail="Tree Map requires at least one categorical (discrete) column for hierarchy and one scalar for size.")
                 
                 # parent node is foreign key, child node is the primary key
-                parent_col = lexical_cols[0]
+                parent_col = discrete_cols[0]
                 child_col = pk_names[0] if pk_names else columns_to_fetch[0]
                 val_col = scalar_cols[0]
 
@@ -180,7 +180,7 @@ fig = px.treemap(df,
 fig.show()'''
 
             elif request.geom == "sankey":
-                dims = pk_names + [c for c in lexical_cols if c not in pk_names]
+                dims = pk_names + [c for c in discrete_cols if c not in pk_names]
                 if len(dims) < 2:
                     raise HTTPException(status_code=400, detail="Sankey Diagram requires at least two categorical dimensions for source and target.")
                 
@@ -321,7 +321,7 @@ wc.generate_from_frequencies(freq_dict)
         gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
 
         if request.stat in ["bin", "density"]:
-            group_col = lexical_cols[0] if lexical_cols else None
+            group_col = discrete_cols[0] if discrete_cols else None
             if group_col:
                 unique_count = df[group_col].nunique()
                 if unique_count > 10:
@@ -547,8 +547,8 @@ wc.generate_from_frequencies(freq_dict)
                 x_col = "Entity_Group"
                 df[x_col] = df[entity_cols].astype(str).agg(', '.join, axis=1)
                 x_display_name = " + ".join(entity_cols)
-            elif lexical_cols:
-                x_col = lexical_cols[0]
+            elif discrete_cols:
+                x_col = discrete_cols[0]
                 x_display_name = x_col
             else:
                 x_col = pk_names[0] if pk_names else columns_to_fetch[0]
@@ -602,21 +602,21 @@ wc.generate_from_frequencies(freq_dict)
 
         # Heatmap Matrix
         elif request.geom == "tile" and request.stat == "identity":
-            if len(lexical_cols) + len(pk_names) < 2:
-                raise HTTPException(status_code=400, detail="Heatmap Matrix requires at least two categorical columns (lexical or primary key) to define the axes.")
+            if len(discrete_cols) + len(pk_names) < 2:
+                raise HTTPException(status_code=400, detail="Heatmap Matrix requires at least two categorical columns (discrete or primary key) to define the axes.")
                 
-            dims = pk_names + [c for c in lexical_cols if c not in pk_names]
+            dims = pk_names + [c for c in discrete_cols if c not in pk_names]
             x_col = dims[0]
             y_col = dims[1]
             
-            remaining_lexicals = [c for c in lexical_cols if c not in [x_col, y_col]]
+            remaining_discretes = [c for c in discrete_cols if c not in [x_col, y_col]]
             
             is_fill_scalar = False
             if scalar_cols:
                 fill_col = scalar_cols[0]
                 is_fill_scalar = True
-            elif remaining_lexicals:
-                fill_col = remaining_lexicals[0]
+            elif remaining_discretes:
+                fill_col = remaining_discretes[0]
             else:
                 fill_col = None
             
