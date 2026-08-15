@@ -15,7 +15,7 @@ def get_semantic_type(db_type_str: str) -> str:
     if any(t in db_type_str for t in TEMP_TYPES):
         return "temporal"
     if any(t in db_type_str for t in LEX_TYPES):
-        return "lexical"
+        return "discrete"
     return "unknown"
 
 def extract_database_metadata(engine) -> List[TableMetadata]:
@@ -43,7 +43,7 @@ def extract_database_metadata(engine) -> List[TableMetadata]:
                         distinct_count = conn.execute(query).scalar()
                         
                         if distinct_count is not None and 0 < distinct_count <= DISCRETE_THRESHOLD:
-                            semantic_type = "lexical"
+                            semantic_type = "discrete"
                             
                     except Exception as e:
                         print(f"failed to inspect {t_name}.{col_name}, downgrading to scalar: {e}")
