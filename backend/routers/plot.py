@@ -174,6 +174,11 @@ def generate_plot(request: PlotRequest):
                     fig.update_traces(marker=dict(colors=np.log10(df[val_col] + 1), colorscale='Viridis'))
 
                 code_snippet = f'''
+import plotly.express as px
+
+# prepare data and filtering as needed
+# df = pd.read_sql_query(...)
+
 fig = px.treemap(df, 
                  path=['{parent_col}', '{child_col}'], 
                  values='{val_col}',
@@ -229,6 +234,13 @@ fig.show()'''
                 fig.update_layout(title_text=f"Sankey Flow: {source_col} to {target_col}", font_size=12)
 
                 code_snippet = f'''
+import plotly.graph_objects as go
+import pandas as pd
+
+dims = pk_names + [c for c in lexical_cols if c not in pk_names]
+source_col = dims[0]
+target_col = dims[1]
+val_col = scalar_cols[0] if scalar_cols else None
 all_nodes = list(pd.unique(df[['{source_col}', '{target_col}']].values.ravel('K')))
 node_map = {{node: i for i, node in enumerate(all_nodes)}}
 
@@ -302,6 +314,11 @@ fig.show()'''
             '''
             
             code_snippet = f'''
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+
+# data preparation and Top-{limit} sampling
+# df = pd.read_sql_query(...)
 freq_dict = dict(zip(df['{word_col}'].astype(str), df['{freq_col}']))
 
 wc = WordCloud(
@@ -548,10 +565,21 @@ wc.generate_from_frequencies(freq_dict)
             df = df.sort_values(by=[group_col, x_col] if group_col else [x_col])
 
             gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
-            
+
+            from plotnine import scale_color_manual
             if group_col:
-                mapping = aes(x=x_col, y=y_col, color=group_col, group=group_col, tooltip=y_col, hover_group=group_col)
+                mapping = aes(x=x_col, y=y_col, color=group_col, group=group_col, tooltip=group_col, hover_group=group_col)
                 gg = gg + mapping + geom_line(size=1) + geom_point(size=2, alpha=0.8) + labs(title=f"{title_prefix}Trend of {y_col} by {group_display_name}", color="Entity")
+                distinct_colors = [
+                    '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', 
+                    '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', 
+                    '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', 
+                    '#808000', '#ffd8b1', '#000075', '#808080', '#1f77b4'
+                ]
+                color_count = df[group_col].nunique()
+                colors_to_use = (distinct_colors * (color_count // len(distinct_colors) + 1))[:color_count]
+                
+                gg = gg + scale_color_manual(values=colors_to_use)
             else:
                 mapping = aes(x=x_col, y=y_col, tooltip=x_col)
                 gg = gg + mapping + geom_line(color="#1890ff", size=1) + geom_point(color="#1890ff", size=2) + labs(title=f"Trend of {y_col}")
@@ -805,15 +833,32 @@ wc.generate_from_frequencies(freq_dict)
         if request.filter_column and request.filter_operator and request.filter_value is not None:
             filter_code_str = f'# Apply filter\ndf = df[df["{request.filter_column}"] {request.filter_operator} {request.filter_value}]\n\n'
 
+        lookup_code_str = ""
+        if request.lookups:
+            lookup_code_str += "# Apply alternative key replacement\n"
+            for lk in request.lookups:
+                lookup_code_str += f"df_{lk.target_table} = pd.read_sql_query('SELECT \"{lk.target_join_key}\", \"{lk.target_display_col}\" AS \"_display\" FROM \"{lk.target_table}\"', engine)\n"
+                lookup_code_str += f"df = df.merge(df_{lk.target_table}, left_on='{lk.local_column}', right_on='{lk.target_join_key}', how='left')\n"
+                lookup_code_str += f"df['{lk.local_column}'] = df['_display'].fillna(df['{lk.local_column}'])\n"
+            lookup_code_str += "\n"
+
         group_others_code_str = ""
         if request.group_others and request.limit_count > 0:
+            group_others_code_str += f"# Group remaining data\n"
             group_others_code_str += f"top_entities = df['{c_x}'].head({request.limit_count}).tolist()\n"
             group_others_code_str += f"df['{c_x}'] = df['{c_x}'].apply(lambda x: x if x in top_entities else 'Other')\n"
             if request.geom == "col":
                 group_others_code_str += f"df = df.groupby('{c_x}', as_index=False).agg({{{c_y}: 'sum'}})\n"
             group_others_code_str += "\n"
 
-        code_snippet = f'''{filter_code_str}{group_others_code_str}gg = (
+        code_snippet = f'''
+import pandas as pd
+from plotnine import *
+
+# prepare data and apply sampling as needed
+# df = pd.read_sql_query("SELECT ... FROM country", engine)
+
+{filter_code_str}{lookup_code_str}{group_others_code_str}gg = (
     ggplot(df)
     + aes({aes_str})
     + {geom_str}{scale_str}

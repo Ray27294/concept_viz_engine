@@ -59,8 +59,28 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const handleTargetTableChange = (index: number, newTable: string) => {
     const newLookups = [...lookups];
     newLookups[index].target_table = newTable;
-    newLookups[index].target_join_key = '';
-    newLookups[index].target_display_col = '';
+    const targetTableMeta = dbMetadata.find(t => t.table_name === newTable);
+    
+    if (targetTableMeta) {
+      const inferredJoinKey = 
+        (targetTableMeta as any).primary_key?.[0] || 
+        targetTableMeta.columns.find(c => ['id', 'code', 'uuid'].includes(c.name.toLowerCase()))?.name || 
+        targetTableMeta.columns[0]?.name || 
+        '';
+      
+      newLookups[index].target_join_key = inferredJoinKey;
+
+      const inferredDisplayCol = 
+        targetTableMeta.columns.find(c => ['name', 'title', 'label', 'description'].includes(c.name.toLowerCase()))?.name || 
+        '';
+        
+      newLookups[index].target_display_col = inferredDisplayCol;
+      
+    } else {
+      newLookups[index].target_join_key = '';
+      newLookups[index].target_display_col = '';
+    }
+    
     setLookups(newLookups);
   };
 
@@ -263,7 +283,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text strong>Alternative Key Lookup (Foreign Key Tracing)</Text>
+                      <Text strong>Alternative Key Lookup</Text>
                       <Button size="small" type="dashed" onClick={addLookup}>+ Add Lookup Rule</Button>
                     </div>
                     {lookups.length > 0 && (
@@ -400,7 +420,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
           {chartCode && (
             <Col xs={24} lg={8} style={{ display: 'flex', flexDirection: 'column' }}>
               <Card 
-                title="ggplot Code Snippet" 
+                title="python Code" 
                 style={{ 
                   borderRadius: '8px', 
                   flex: 1, 
