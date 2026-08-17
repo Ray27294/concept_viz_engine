@@ -49,6 +49,7 @@ class PlotRequest(BaseModel):
     filter_value: Optional[float] = None
     x_axis_col: Optional[str] = None
     lookups: Optional[List[DimensionLookup]] = []
+    group_others: bool = False
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -371,21 +372,33 @@ wc.generate_from_frequencies(freq_dict)
                 title_prefix = ""
                 if len(df) > request.limit_count:
                     if request.limit_method == "top":
-                        df = df.sort_values(by=y_col, ascending=False).head(request.limit_count)
+                        top_entities = df.sort_values(by=y_col, ascending=False)[x_col].head(request.limit_count).tolist()
                         title_prefix = f"Top {request.limit_count} "
                     elif request.limit_method == "bottom":
-                        df = df.sort_values(by=y_col, ascending=True).head(request.limit_count)
+                        top_entities = df.sort_values(by=y_col, ascending=True)[x_col].head(request.limit_count).tolist()
                         title_prefix = f"Bottom {request.limit_count} "
                     elif request.limit_method == "random":
-                        df = df.sample(n=request.limit_count)
+                        top_entities = df[x_col].sample(n=request.limit_count).tolist()
                         title_prefix = f"Random Sample ({request.limit_count}) "
                     elif request.limit_method == "distributed":
                         df_sorted = df.sort_values(by=y_col, ascending=False)
                         indices = np.linspace(0, len(df_sorted) - 1, request.limit_count, dtype=int)
-                        df = df_sorted.iloc[indices]
+                        top_entities = df_sorted.iloc[indices][x_col].tolist()
                         title_prefix = f"Distributed Sample ({request.limit_count}) "
+                    else:
+                        top_entities = df.sort_values(by=y_col, ascending=False)[x_col].head(request.limit_count).tolist()
+                        title_prefix = f"Top {request.limit_count} "
 
-                df[x_col] = pd.Categorical(df[x_col], categories=df[x_col].tolist()[::-1], ordered=True)
+                    if request.group_others:
+                        df[x_col] = df[x_col].apply(lambda x: x if x in top_entities else 'Other')
+                        df = df.groupby(x_col, as_index=False).agg({y_col: 'sum'})
+                        
+                        cats = ['Other'] + [e for e in top_entities if e in df[x_col].values]
+                        df[x_col] = pd.Categorical(df[x_col], categories=cats[::-1], ordered=True)
+                        title_prefix += "(with Others) "
+                    else:
+                        df = df[df[x_col].isin(top_entities)]
+                        df[x_col] = pd.Categorical(df[x_col], categories=top_entities[::-1], ordered=True)
 
                 gg = ggplot(df) + theme_minimal() + theme(axis_text_x=element_text(rotation=45, hjust=1))
             
@@ -522,7 +535,15 @@ wc.generate_from_frequencies(freq_dict)
                 else:
                     top_groups = df.groupby(group_col)[y_col].max().nlargest(request.limit_count).index.tolist()
 
-                df = df[df[group_col].isin(top_groups)]
+                if getattr(request, "group_others", False):
+                    df[group_col] = df[group_col].apply(lambda x: x if x in top_groups else 'Other')
+                    df = df.groupby([x_col, group_col], as_index=False)[y_col].sum()
+                    
+                    cats = [g for g in top_groups if g in df[group_col].values] + ['Other']
+                    df[group_col] = pd.Categorical(df[group_col], categories=cats, ordered=True)
+                    title_prefix += "(with Others) "
+                else:
+                    df = df[df[group_col].isin(top_groups)]
 
             df = df.sort_values(by=[group_col, x_col] if group_col else [x_col])
 
@@ -575,10 +596,24 @@ wc.generate_from_frequencies(freq_dict)
                 else:
                     top_entities = df.groupby(x_col)[y_col].max().nlargest(request.limit_count).index.tolist()
 
-                df = df[df[x_col].isin(top_entities)]
+                if request.group_others:
+                    df[x_col] = df[x_col].apply(lambda x: x if x in top_entities else 'Other')
+                    title_prefix += "(with Others) "
+                else:
+                    df = df[df[x_col].isin(top_entities)]
 
             is_ascending = True if request.limit_method == "bottom" else False
-            ordered_cats = df.groupby(x_col)[y_col].max().sort_values(ascending=is_ascending).index.tolist()
+            
+            if request.group_others and df[x_col].nunique() > request.limit_count:
+                non_other_df = df[df[x_col] != 'Other']
+                if not non_other_df.empty:
+                    ordered_cats = non_other_df.groupby(x_col)[y_col].max().sort_values(ascending=is_ascending).index.tolist()
+                else:
+                    ordered_cats = []
+                ordered_cats.append('Other')
+            else:
+                ordered_cats = df.groupby(x_col)[y_col].max().sort_values(ascending=is_ascending).index.tolist()
+                
             df[x_col] = pd.Categorical(df[x_col], categories=ordered_cats, ordered=True)
             df = df.sort_values(by=[x_col])
             
@@ -770,7 +805,15 @@ wc.generate_from_frequencies(freq_dict)
         if request.filter_column and request.filter_operator and request.filter_value is not None:
             filter_code_str = f'# Apply filter\ndf = df[df["{request.filter_column}"] {request.filter_operator} {request.filter_value}]\n\n'
 
-        code_snippet = f'''{filter_code_str}gg = (
+        group_others_code_str = ""
+        if request.group_others and request.limit_count > 0:
+            group_others_code_str += f"top_entities = df['{c_x}'].head({request.limit_count}).tolist()\n"
+            group_others_code_str += f"df['{c_x}'] = df['{c_x}'].apply(lambda x: x if x in top_entities else 'Other')\n"
+            if request.geom == "col":
+                group_others_code_str += f"df = df.groupby('{c_x}', as_index=False).agg({{{c_y}: 'sum'}})\n"
+            group_others_code_str += "\n"
+
+        code_snippet = f'''{filter_code_str}{group_others_code_str}gg = (
     ggplot(df)
     + aes({aes_str})
     + {geom_str}{scale_str}

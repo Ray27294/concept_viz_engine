@@ -46,6 +46,7 @@ export interface PlotRequest {
   filter_value?: number | null;
   x_axis_col?: string | null;
   lookups?: DimensionLookup[];
+  group_others?: boolean;
 }
 
 export interface PlotResponse {

@@ -36,5 +36,5 @@ export interface DataPreviewRequest {
 
 export interface DataPreviewResponse {
   columns: string[];
-  rows: Record<string, any>[]; // 键值对字典
+  rows: Record<string, any>[];
 }

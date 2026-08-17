@@ -28,6 +28,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [xAxisCol, setXAxisCol] = useState<string | null>(null);
   const [lookups, setLookups] = useState<DimensionLookup[]>([]);
   const [dbMetadata, setDbMetadata] = useState<TableMetadata[]>([]);
+  const [groupOthers, setGroupOthers] = useState<boolean>(false);
 
   // Metadata fetching for alternative key lookup options
   useEffect(() => {
@@ -146,7 +147,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         filter_operator: filterOperator,
         filter_value: filterValue,
         x_axis_col: xAxisCol,
-        lookups: lookups.filter(lk => lk.local_column && lk.target_table)
+        lookups: lookups.filter(lk => lk.local_column && lk.target_table),
+        group_others: groupOthers
       });
       setChartHtml(res.html);
       setChartCode(res.code || null);
@@ -320,7 +322,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
             )}
 
             <Row gutter={24}>
-              {/* If it's a bar chart or a line chart, show sampling method options */}
+              {/* sampling method options */}
               <Col span={12}>
                 {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range", "Heatmap Matrix", "Tree Map", "Sankey Diagram", "Word Cloud"].includes(matchedChartName) ? (
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -345,6 +347,12 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                       ]}
                     />
                     </Space.Compact>
+                    {["Bar Chart", "Line Chart", "Boxplot", "Violin Plot", "Point Range"].includes(matchedChartName || "") && (
+                      <Space style={{ marginTop: '8px' }}>
+                        <Switch checked={groupOthers} onChange={setGroupOthers} size="small" />
+                        <Text type="secondary">Group remaining data</Text>
+                      </Space>
+                    )}
                   </Space>
                 ) : (
                   <Text type="secondary">Current chart does not require row truncation</Text>
