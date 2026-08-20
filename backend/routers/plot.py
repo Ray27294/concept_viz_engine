@@ -139,9 +139,10 @@ def generate_plot(request: PlotRequest):
         # ==========================================
         # Plotly engine
         # ==========================================
-        if request.geom in ["treemap", "sankey"]:
+        if request.geom in ["treemap", "sankey", "sunburst"]:
             limit = request.limit_count
-            if request.geom == "treemap":
+            if request.geom in ["treemap", "sunburst"]:
+                chart_title_name = "Tree Map" if request.geom == "treemap" else "Sunburst Chart"
                 if len(discrete_cols) == 0 or not scalar_cols:
                     raise HTTPException(status_code=400, detail="Tree Map requires at least one categorical (discrete) column for hierarchy and one scalar for size.")
                 
@@ -168,8 +169,14 @@ def generate_plot(request: PlotRequest):
                     
                     df = df[df[parent_col].isin(top_parents)]
                 
-                fig = px.treemap(df, path=[parent_col, child_col], values=val_col, 
-                                 title=f"Tree Map of {val_col} (Hierarchy: {parent_col} -> {child_col})")
+                if request.geom == "treemap":
+                    fig = px.treemap(df, path=[parent_col, child_col], values=val_col, 
+                                     title=f"{chart_title_name} of {val_col} (Hierarchy: {parent_col} -> {child_col})")
+                    func_name = "px.treemap"
+                else:
+                    fig = px.sunburst(df, path=[parent_col, child_col], values=val_col, 
+                                      title=f"{chart_title_name} of {val_col} (Hierarchy: {parent_col} -> {child_col})")
+                    func_name = "px.sunburst"
                 if request.log_scale:
                     fig.update_traces(marker=dict(colors=np.log10(df[val_col] + 1), colorscale='Viridis'))
 
@@ -179,7 +186,7 @@ import plotly.express as px
 # prepare data and filtering as needed
 # df = pd.read_sql_query(...)
 
-fig = px.treemap(df, 
+fig = {func_name}(df, 
                  path=['{parent_col}', '{child_col}'], 
                  values='{val_col}',
                  title='Tree Map of {val_col}')
@@ -572,8 +579,8 @@ wc.generate_from_frequencies(freq_dict)
                 gg = gg + mapping + geom_line(size=1) + geom_point(size=2, alpha=0.8) + labs(title=f"{title_prefix}Trend of {y_col} by {group_display_name}", color="Entity")
                 distinct_colors = [
                     '#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', 
-                    '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', 
-                    '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', 
+                    '#46f0f0', '#f032e6', '#9a6324', '#fabebe', '#008080', 
+                    '#e6beff', '#bcf60c', '#fffac8', '#800000', '#aaffc3', 
                     '#808000', '#ffd8b1', '#000075', '#808080', '#1f77b4'
                 ]
                 color_count = df[group_col].nunique()

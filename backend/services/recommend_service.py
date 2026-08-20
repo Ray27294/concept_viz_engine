@@ -67,6 +67,7 @@ def recommend_components(
     elif "One-to-Many" in pattern:
         if num_scalars == 1:
             combinations.append(ChartCombination(chart_name="Tree Map", geom="treemap", stat="identity"))
+            combinations.append(ChartCombination(chart_name="Sunburst Chart", geom="sunburst", stat="identity"))
             combinations.append(ChartCombination(chart_name="Boxplot", geom="boxplot", stat="boxplot"))
             combinations.append(ChartCombination(chart_name="Violin Plot", geom="violin", stat="ydensity"))
             combinations.append(ChartCombination(chart_name="Point Range", geom="pointrange", stat="summary"))
