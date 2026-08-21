@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import text
-from database import engine
+from database import db_manager
 from schemas import DataPreviewRequest, DataPreviewResponse
 
 router = APIRouter(prefix="/data", tags=["Data Preview"])
@@ -16,7 +16,7 @@ def get_data_preview(request: DataPreviewRequest):
     query = text(f"SELECT {safe_cols} FROM public.{safe_table} LIMIT :limit")
 
     try:
-        with engine.connect() as conn:
+        with db_manager.get_engine().connect() as conn:
             result = conn.execute(query, {"limit": request.limit})
             rows = [dict(row._mapping) for row in result]
             return DataPreviewResponse(columns=request.selected_columns, rows=rows)

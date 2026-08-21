@@ -1,10 +1,11 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from database import SessionLocal, engine
 from schemas import TableMetadata
 from typing import List
 from services import metadata_service
+from database import db_manager
 from routers import debug, recommend, data, plot
 from fastapi.middleware.cors import CORSMiddleware
 import matplotlib
@@ -20,13 +21,23 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+class DBConnectRequest(BaseModel):
+    host: str
+    port: str = "5432"
+    database: str
+    username: str
+    password: str
+
 app.include_router(debug.router)
 app.include_router(recommend.router)
 app.include_router(data.router)
 app.include_router(plot.router)
 
 def get_db():
-    db = SessionLocal()
+    if db_manager.SessionLocal is None:
+        raise HTTPException(status_code=500, detail="Database is not connected. Please connect first.")
+    
+    db = db_manager.SessionLocal()
     try:
         yield db
     finally:
@@ -54,4 +65,17 @@ def test_database_connection(db: Session = Depends(get_db)):
 
 @app.get("/metadata", response_model=List[TableMetadata])
 def fetch_database_metadata():
-    return metadata_service.extract_database_metadata(engine)
+    try:
+        engine = db_manager.get_engine()
+        return metadata_service.extract_database_metadata(engine)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/connect")
+def connect_database(req: DBConnectRequest):
+    db_url = f"postgresql://{req.username}:{req.password}@{req.host}:{req.port}/{req.database}"
+    try:
+        db_manager.connect(db_url)
+        return {"status": "success", "message": f"Successfully connected to {req.database} at {req.host}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to connect to database: {str(e)}")

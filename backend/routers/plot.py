@@ -8,7 +8,7 @@ matplotlib.use('Agg')
 from sqlalchemy import text
 from plotnine import ggplot, aes, geom_col, geom_bar, geom_histogram, geom_line, geom_density, geom_map, geom_point, geom_boxplot, geom_violin, geom_pointrange, geom_tile, geom_bin2d, scale_y_log10, theme_minimal, theme_void, labs, theme, element_text, scale_x_log10, scale_fill_continuous
 from ninejs import interactive, to_html
-from database import engine
+from database import db_manager
 from services.metadata_service import extract_database_metadata
 import plotly.express as px
 import plotly.graph_objects as go
@@ -54,7 +54,7 @@ class PlotRequest(BaseModel):
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
     # To fetch the table metadata and add primary key
-    metadata = extract_database_metadata(engine)
+    metadata = extract_database_metadata(db_manager.get_engine())
     table_meta = next((t for t in metadata if t.table_name == request.table_name), None)
     
     if not table_meta:
@@ -79,7 +79,7 @@ def generate_plot(request: PlotRequest):
         query += f" WHERE {where_clause}"
     
     try:
-        df = pd.read_sql_query(query, engine)
+        df = pd.read_sql_query(query, db_manager.get_engine())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}")
 
@@ -109,7 +109,7 @@ def generate_plot(request: PlotRequest):
             for lk in request.lookups:
                 # Find the primary key and the display column in the target table
                 lookup_query = f'SELECT "{lk.target_join_key}", "{lk.target_display_col}" AS "_display" FROM public."{lk.target_table}"'
-                df_lookup = pd.read_sql_query(lookup_query, engine)
+                df_lookup = pd.read_sql_query(lookup_query, db_manager.get_engine())
                 
                 # Perform a left join
                 df = df.merge(df_lookup, left_on=lk.local_column, right_on=lk.target_join_key, how="left")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from database import engine
+from database import db_manager
 from services.metadata_service import extract_database_metadata
 from services.inference_service import (
     is_basic_entity, 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/debug", tags=["Debug Endpoints"])
 
 @router.get("/test-all-patterns")
 def test_all_database_patterns():
-    all_tables = extract_database_metadata(engine)
+    all_tables = extract_database_metadata(db_manager.get_engine())
     report = []
 
     for table in all_tables:

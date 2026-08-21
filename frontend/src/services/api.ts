@@ -60,3 +60,25 @@ export const fetchChartHtml = async (
   const response = await apiClient.post<PlotResponse>('/plot/generate', requestData);
   return response.data;
 };
+
+export interface DBConnectionParams {
+  host: string;
+  port: string;
+  database: string;
+  username: string;
+  password?: string;
+}
+
+export const connectDatabase = async (params: DBConnectionParams) => {
+  const response = await fetch('http://127.0.0.1:8000/connect', { 
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.detail || 'Failed to connect to the database');
+  }
+  return response.json();
+};

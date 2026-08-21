@@ -1,10 +1,23 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:root@localhost:5432/mondial"
+class DatabaseManager:
+    def __init__(self):
+        self.engine = None
+        self.SessionLocal = None
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+    def connect(self, db_url: str):
+        self.engine = create_engine(db_url)
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        
+        with self.engine.connect() as conn:
+            pass 
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    def get_engine(self):
+        if self.engine is None:
+            raise Exception("Database is not connected yet. Please connect first.")
+        return self.engine
+
+db_manager = DatabaseManager()
 
 Base = declarative_base()

@@ -4,12 +4,14 @@ import { DataPreview } from './components/DataPreview';
 import { ChartConfigurator } from './components/ChartConfigurator';
 import { useEffect, useState } from 'react';
 import { fetchRecommendations } from './services/api';
+import { DatabaseConnector } from './components/DatabaseConnector';
 import type { RecommendationResponse } from './types';
 
 const { Title, Paragraph, Text } = Typography;
 const { Content } = Layout;
 
 function App() {
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
   const [analysisConfig, setAnalysisConfig] = useState<{table: string, cols: string[], scalarCols: string[]} | null>(null);
 
   const [recommendations, setRecommendations] = useState<RecommendationResponse | null>(null);
@@ -40,6 +42,10 @@ function App() {
       getRecommendations();
     }
   }, [analysisConfig]);
+
+  if (!isDbConnected) {
+    return <DatabaseConnector onConnected={() => setIsDbConnected(true)} />;
+  }
   
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f0f2f5' }}>
