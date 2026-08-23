@@ -8,7 +8,7 @@ def main():
     try:
         print("-> Starting Backend on port 8000...")
         backend_process = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "main:app", "--reload"],
+            [sys.executable,"-X", "utf8", "-m", "uvicorn", "main:app", "--reload"],
             cwd="backend"
         )
         
