@@ -35,6 +35,14 @@ class DimensionLookup(BaseModel):
     target_join_key: str       # primary key of the target table (e.g., code)
     target_display_col: str    # candidate key/display column of the target table (e.g., name)
 
+class CrossTableFilter(BaseModel):
+    local_join_key: str        # current table join column (e.g., code)
+    target_table: str          # target table (e.g., encompasses)
+    target_join_key: str       # target table join column (e.g., country)
+    filter_column: str         # target table filter column (e.g., continent)
+    filter_operator: str       # filter operator (e.g., ==)
+    filter_value: str          # filter value (e.g., Europe)
+
 class PlotRequest(BaseModel):
     table_name: str
     selected_columns: List[str]
@@ -50,6 +58,7 @@ class PlotRequest(BaseModel):
     x_axis_col: Optional[str] = None
     lookups: Optional[List[DimensionLookup]] = []
     group_others: bool = False
+    cross_filters: Optional[List[CrossTableFilter]] = []
 
 @router.post("/generate")
 def generate_plot(request: PlotRequest):
@@ -102,6 +111,25 @@ def generate_plot(request: PlotRequest):
             
             if df.empty:
                 raise HTTPException(status_code=400, detail=f"No data remaining after applying filter: {col} {op} {val}")
+
+    # Apply cross-table filtering
+    if request.cross_filters:
+        try:
+            for cf in request.cross_filters:
+                sql_op = "=" if cf.filter_operator == "==" else cf.filter_operator
+                
+                val = cf.filter_value
+                val_fmt = f"'{val}'" if not val.replace('.', '', 1).isdigit() or cf.filter_operator in ["==", "!="] else val
+                
+                sub_query = f'SELECT "{cf.target_join_key}" FROM public."{cf.target_table}" WHERE "{cf.filter_column}" {sql_op} {val_fmt}'
+                df_sub = pd.read_sql_query(sub_query, db_manager.get_engine())
+                
+                df = df[df[cf.local_join_key].isin(df_sub[cf.target_join_key])]
+                
+                if df.empty:
+                    raise HTTPException(status_code=400, detail=f"No data remaining after cross-table filter on {cf.target_table}")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed during cross-table filtering: {str(e)}")
 
     # Apply alternative key replacement
     if request.lookups:
@@ -840,6 +868,17 @@ wc.generate_from_frequencies(freq_dict)
         if request.filter_column and request.filter_operator and request.filter_value is not None:
             filter_code_str = f'# Apply filter\ndf = df[df["{request.filter_column}"] {request.filter_operator} {request.filter_value}]\n\n'
 
+        cross_filter_code_str = ""
+        if request.cross_filters:
+            cross_filter_code_str += "# Apply cross-table filtering\n"
+            for cf in request.cross_filters:
+                sql_op = "=" if cf.filter_operator == "==" else cf.filter_operator
+                val = cf.filter_value
+                val_fmt = f"'{val}'" if not val.replace('.', '', 1).isdigit() or cf.filter_operator in ["==", "!="] else val
+                cross_filter_code_str += f"df_{cf.target_table} = pd.read_sql_query('SELECT \"{cf.target_join_key}\" FROM \"{cf.target_table}\" WHERE \"{cf.filter_column}\" {sql_op} {val_fmt}', engine)\n"
+                cross_filter_code_str += f"df = df[df['{cf.local_join_key}'].isin(df_{cf.target_table}['{cf.target_join_key}'])]\n"
+            cross_filter_code_str += "\n"
+
         lookup_code_str = ""
         if request.lookups:
             lookup_code_str += "# Apply alternative key replacement\n"
@@ -865,7 +904,7 @@ from plotnine import *
 # prepare data and apply sampling as needed
 # df = pd.read_sql_query("SELECT ... FROM country", engine)
 
-{filter_code_str}{lookup_code_str}{group_others_code_str}gg = (
+{filter_code_str}{cross_filter_code_str}{lookup_code_str}{group_others_code_str}gg = (
     ggplot(df)
     + aes({aes_str})
     + {geom_str}{scale_str}

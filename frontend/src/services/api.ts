@@ -32,6 +32,15 @@ export interface DimensionLookup {
   target_display_col: string;
 }
 
+export interface CrossTableFilter {
+  local_join_key: string;
+  target_table: string;
+  target_join_key: string;
+  filter_column: string;
+  filter_operator: string;
+  filter_value: string;
+}
+
 export interface PlotRequest {
   table_name: string;
   selected_columns: string[];
@@ -47,6 +56,7 @@ export interface PlotRequest {
   x_axis_col?: string | null;
   lookups?: DimensionLookup[];
   group_others?: boolean;
+  cross_filters?: CrossTableFilter[];
 }
 
 export interface PlotResponse {

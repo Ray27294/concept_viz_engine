@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber } from 'antd';
-import { fetchChartHtml, fetchMetadata, type DimensionLookup } from '../services/api';
+import { Card, Select, Typography, Space, Row, Col, Tag, Alert, Button, message, Switch, InputNumber, Input } from 'antd';
+import { fetchChartHtml, fetchMetadata, type CrossTableFilter, type DimensionLookup } from '../services/api';
 import type { RecommendationResponse, TableMetadata } from '../types';
 
 const { Title, Text } = Typography;
@@ -29,6 +29,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
   const [lookups, setLookups] = useState<DimensionLookup[]>([]);
   const [dbMetadata, setDbMetadata] = useState<TableMetadata[]>([]);
   const [groupOthers, setGroupOthers] = useState<boolean>(false);
+  const [crossFilters, setCrossFilters] = useState<CrossTableFilter[]>([]);
 
   // Metadata fetching for alternative key lookup options
   useEffect(() => {
@@ -56,6 +57,20 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setLookups(newLookups);
   };
 
+  // Functions to handle cross-table filters
+  const addCrossFilter = () => {
+    setCrossFilters([...crossFilters, { local_join_key: '', target_table: '', target_join_key: '', filter_column: '', filter_operator: '==', filter_value: '' }]);
+  };
+  const removeCrossFilter = (index: number) => {
+    setCrossFilters(crossFilters.filter((_, i) => i !== index));
+  };
+  const updateCrossFilter = (index: number, field: keyof CrossTableFilter, value: string) => {
+    const newFilters = [...crossFilters];
+    newFilters[index][field] = value;
+    setCrossFilters(newFilters);
+  };
+
+  // To auto-fill the target join key and display column when a target table is selected in the lookup
   const handleTargetTableChange = (index: number, newTable: string) => {
     const newLookups = [...lookups];
     newLookups[index].target_table = newTable;
@@ -84,6 +99,24 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setLookups(newLookups);
   };
 
+  // To auto-fill the target join key and display column when a target table is selected in the cross-table filter
+  const handleCrossTargetTableChange = (index: number, newTable: string) => {
+    const newFilters = [...crossFilters];
+    newFilters[index].target_table = newTable;
+    
+    const targetTableMeta = dbMetadata.find(t => t.table_name === newTable);
+    if (targetTableMeta) {
+      const inferredJoinKey = 
+        targetTableMeta.columns.find(c => c.name.toLowerCase() === tableName.toLowerCase())?.name || 
+        (targetTableMeta as any).primary_key?.[0] || 
+        targetTableMeta.columns[0]?.name || '';
+      
+      newFilters[index].target_join_key = inferredJoinKey;
+      newFilters[index].filter_column = '';
+    }
+    setCrossFilters(newFilters);
+  };
+
   // When the user selects a new table or columns, reset the Geom and Stat selections to null
   useEffect(() => {
     setSelectedGeom(null);
@@ -96,6 +129,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
     setFilterValue(null);
     setXAxisCol(null);
     setLookups([]);
+    setGroupOthers(false);
+    setCrossFilters([]);
   }, [recommendations]);
 
   const discreteColumns = useMemo(() => {
@@ -168,7 +203,8 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
         filter_value: filterValue,
         x_axis_col: xAxisCol,
         lookups: lookups.filter(lk => lk.local_column && lk.target_table),
-        group_others: groupOthers
+        group_others: groupOthers,
+        cross_filters: crossFilters.filter(cf => cf.local_join_key && cf.target_table && cf.filter_value)
       });
       setChartHtml(res.html);
       setChartCode(res.code || null);
@@ -217,6 +253,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
 
       {matchedChartName && (
           <div style={{ marginTop: '20px', padding: '16px', backgroundColor: '#fafafa', borderRadius: '8px', border: '1px solid #e8e8e8' }}>
+            {/* Data Filter */}
             <Row gutter={24} style={{ marginBottom: '16px' }}>
               <Col span={24}>
                 <Space direction="vertical" style={{ width: '100%' }}>
@@ -257,7 +294,34 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
               </Col>
             </Row>
 
-            {discreteColumns.length > 0 && ["Word Cloud", "Bar Chart"].includes(matchedChartName) && (
+            {/* Cross-Table Filter Section */}
+            <Row gutter={24} style={{ marginBottom: '16px' }}>
+              <Col span={24}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text strong>Cross-Table Filter (Optional)</Text>
+                    <Button size="small" type="dashed" onClick={addCrossFilter}>+ Add Cross Filter</Button>
+                  </div>
+                  {crossFilters.length > 0 && (
+                    <div style={{ padding: '10px', backgroundColor: '#e6f7ff', borderRadius: '6px', border: '1px solid #91d5ff' }}>
+                      {crossFilters.map((cf, index) => (
+                        <Space.Compact style={{ width: '100%', marginBottom: index === crossFilters.length - 1 ? 0 : '8px' }} key={index}>
+                          <Select placeholder="Local Key (e.g. code)" value={cf.local_join_key || undefined} onChange={(v) => updateCrossFilter(index, 'local_join_key', v)} style={{ width: '15%' }} options={columns.map(c => ({ label: c, value: c }))} />
+                          <Select placeholder="Target Table (e.g. encompasses)" value={cf.target_table || undefined} onChange={(v) => handleCrossTargetTableChange(index, v)} style={{ width: '20%' }} showSearch options={dbMetadata.map(t => ({ label: t.table_name, value: t.table_name }))} />
+                          <Select placeholder="Target Key (e.g. country)" value={cf.target_join_key || undefined} onChange={(v) => updateCrossFilter(index, 'target_join_key', v)} style={{ width: '15%' }} options={dbMetadata.find(t => t.table_name === cf.target_table)?.columns.map(c => ({ label: c.name, value: c.name })) || []} />
+                          <Select placeholder="Filter Col (e.g. continent)" value={cf.filter_column || undefined} onChange={(v) => updateCrossFilter(index, 'filter_column', v)} style={{ width: '15%' }} options={dbMetadata.find(t => t.table_name === cf.target_table)?.columns.map(c => ({ label: c.name, value: c.name })) || []} />
+                          <Select value={cf.filter_operator} onChange={(v) => updateCrossFilter(index, 'filter_operator', v)} style={{ width: '12%' }} options={[{ label: '==', value: '==' }, { label: '!=', value: '!=' }, { label: '>', value: '>' }, { label: '<', value: '<' }]} />
+                          <Input placeholder="Value (e.g. Europe)" value={cf.filter_value} onChange={(e) => updateCrossFilter(index, 'filter_value', e.target.value)} style={{ width: '20%' }} />
+                          <Button danger onClick={() => removeCrossFilter(index)}>X</Button>
+                        </Space.Compact>
+                      ))}
+                    </div>
+                  )}
+                </Space>
+              </Col>
+            </Row>
+
+            {["Word Cloud", "Bar Chart"].includes(matchedChartName) && (
               <Row gutter={24} style={{ marginBottom: '16px' }}>
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -268,7 +332,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                       value={xAxisCol}
                       onChange={setXAxisCol}
                       style={{ width: '40%' }}
-                      options={discreteColumns.map(c => ({ label: `${c}`, value: c }))}
+                      options={columns.map(c => ({ label: `${c}`, value: c }))}
                     />
                     <Text type="secondary" style={{ fontSize: '12px' }}>
                       Select a candidate key to replace the default primary key on the axis.
@@ -278,7 +342,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
               </Row>
             )}
 
-            {discreteColumns.length > 0 && !recommendations.pattern.includes("Basic Entity") && (
+            {!recommendations.pattern.includes("Basic Entity") && (
               <Row gutter={24} style={{ marginBottom: '16px' }}>
                 <Col span={24}>
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -295,7 +359,7 @@ export const ChartConfigurator: React.FC<ChartConfiguratorProps> = ({ tableName,
                               value={lookup.local_column || undefined} 
                               onChange={(v) => updateLookup(index, 'local_column', v)} 
                               style={{ width: '22%' }} 
-                              options={discreteColumns.map(c => ({ label: c, value: c }))} 
+                              options={columns.map(c => ({ label: c, value: c }))} 
                             />
                             <Select 
                               placeholder="Target Table (e.g. country)" 
